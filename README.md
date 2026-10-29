@@ -12,9 +12,9 @@
 
 </div>
 
-## 中文项目导读
+## 拳击开发说明
 
-首次阅读本仓库可从[项目与核心代码入门报告](docs/project_beginner_guide.zh-CN.md)开始，了解模块分工、高低层控制、数据与学习流程，以及首次模型提交步骤。当前拳击扩展的操作说明见[规则对齐与独立评测工作流](docs/boxing_competition_workflow.zh-CN.md)。
+当前拳击扩展的操作说明见[规则对齐与独立评测工作流](docs/boxing_competition_workflow.zh-CN.md)。
 
 # Latest News
 

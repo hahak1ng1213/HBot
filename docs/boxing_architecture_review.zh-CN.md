@@ -1,6 +1,6 @@
 # HoloMotion 架构与仿真拳击得分目标梳理
 
-> 本文保留 2026 年 10 月 28 日、规则对齐改动前的源码分析。奖励、终止条件和观测输入等章节已被后续实现扩展。阅读当前版本请先看[项目与核心代码入门报告](project_beginner_guide.zh-CN.md)和[拳击工作流](boxing_competition_workflow.zh-CN.md)。
+> 本文保留 2026 年 10 月 28 日、规则对齐改动前的源码分析。奖励、终止条件和观测输入等章节已被后续实现扩展。阅读当前版本请先看[拳击工作流](boxing_competition_workflow.zh-CN.md)。
 
 分析日期：2026 年 10 月 28 日。范围：本地 `HoloMotion-master/HoloMotion-master` 源码快照。
 
