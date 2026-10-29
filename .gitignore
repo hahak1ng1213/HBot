@@ -98,6 +98,10 @@ MUJOCO_LOG.TXT
 # Participant tutorial outputs are not evaluation image source inputs.
 /models/
 /results/
+/.venv-boxing-check/
+/.test-tmp/
+/thirdparties/HoloMotion_assets/
 /holoboxing/data/raw/
 /holoboxing/data/converted/
 /holoboxing/data/processed/
+/.test-tools/

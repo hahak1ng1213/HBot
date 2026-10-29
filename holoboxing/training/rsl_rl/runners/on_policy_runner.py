@@ -65,7 +65,14 @@ def normalize_observations(
             actor.update(current, task)
             critic.update(raw_critic)
         result[agent] = (
-            actor({"self": current, "task": task, "history": history}),
+            actor(
+                {
+                    "self": current,
+                    "task": task,
+                    "history": history,
+                    "context": packed[..., -2:],
+                }
+            ),
             critic(raw_critic),
         )
     require_finite(result, "normalized observation")
@@ -231,6 +238,11 @@ class OnPolicyRunner:
                 ).latent_policy.load_state_dict(
                     actor.latent_policy.state_dict()
                 )
+                getattr(
+                    self.policy, f"taskpolicy_{role}"
+                ).context_policy.load_state_dict(
+                    actor.context_policy.state_dict()
+                )
                 self.normalizers[f"actor_{role}"].load_state_dict(
                     normalizer.state_dict(), strict=True
                 )
@@ -307,6 +319,15 @@ class OnPolicyRunner:
             for k, v in saved["normalizers"].items()
             if k.startswith("actor_ego.")
         }
+        if hasattr(
+            self.policy.taskpolicy_ego, "context_policy"
+        ) and not self.policy.policy_spec.get("match_context", False):
+            actor.setdefault(
+                "context_policy.weight",
+                torch.zeros_like(
+                    self.policy.taskpolicy_ego.context_policy.weight
+                ).cpu(),
+            )
         require_finite((actor, stats), "policy stage initialization")
         checkpoint_resume.validate_module_state(
             self.policy.taskpolicy_ego, actor, "stage actor"
@@ -338,7 +359,11 @@ class OnPolicyRunner:
         self.observations = self.env.reset()
         self.algorithm.reset_exploration()
         raw = getattr(self.env, "env", None)
-        if raw is not None and hasattr(raw, "episode_length_buf"):
+        if (
+            raw is not None
+            and hasattr(raw, "episode_length_buf")
+            and not getattr(raw, "official_rules", False)
+        ):
             raw.episode_length_buf.random_(0, raw.max_episode_length)
 
     @torch.no_grad()
@@ -448,6 +473,15 @@ class OnPolicyRunner:
                         for name, value in self.env.reward_terms.get(
                             agent, {}
                         ).items()
+                    }
+                )
+                values.update(
+                    {
+                        f"referee/{name}": mean_valid(value.float())
+                        for name, value in self.env.metrics.get(
+                            agent, {}
+                        ).items()
+                        if name.startswith("official_")
                     }
                 )
                 for name, value in values.items():

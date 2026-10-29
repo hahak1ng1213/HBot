@@ -156,9 +156,15 @@ class MujocoSandbagEnv:
         seed=42,
         *,
         standing_reference=None,
+        official_rules=False,
     ):
         self.device, self.num_envs = torch.device(device), worlds
         self.standing_reference = standing_reference
+        self.official_rules = official_rules
+        if official_rules:
+            from .official_referee import OfficialReferees
+
+            self.referees = OfficialReferees(worlds)
         self.physics = CompetitionPhysics(assets, worlds, device)
         self.scene = Scene({a: Robot() for a in AGENTS})
         self.scene.env_origins = torch.zeros((worlds, 3), device=device)
@@ -440,7 +446,15 @@ class MujocoSandbagEnv:
             (
                 noisy["history"],
                 noisy["task"][:, -15:],
-                torch.zeros((2 * self.num_envs, 2), device=self.device),
+                (
+                    torch.as_tensor(
+                        self.referees.context(), device=self.device
+                    ).flatten(0, 1)
+                    if self.official_rules
+                    else torch.zeros(
+                        (2 * self.num_envs, 2), device=self.device
+                    )
+                ),
             ),
             -1,
         )
@@ -458,6 +472,8 @@ class MujocoSandbagEnv:
 
     def _reset(self, ids):
         self.physics.reset(ids)
+        if self.official_rules:
+            self.referees.reset(ids.detach().cpu().tolist())
         if self.standing_reference is not None:
             self.standing_reference.reset(ids)
         qpos = wp.to_torch(self.physics.data.qpos)
@@ -578,6 +594,8 @@ class MujocoSandbagEnv:
             self.physics.targets[:, role] = outputs["joint_target"][agent]
         for _ in range(4):
             self.physics.substep()
+            if self.official_rules:
+                self.referees.sample(self.physics.official_contacts())
         self._sim_step_counter += 4
         self.common_step_counter += 1
         self.episode_length_buf += 1
@@ -589,6 +607,23 @@ class MujocoSandbagEnv:
             terminated[agent] = fallen[:, role] | (buffer >= 5.0)
         terminal = torch.stack(list(terminated.values())).any(0)
         timeout = self.episode_length_buf >= self.max_episode_length
+        official_delta = None
+        if self.official_rules:
+            roots = torch.stack(
+                [self.scene[a].data.root_pos_w for a in AGENTS], 1
+            )
+            results, delta = self.referees.observe(
+                roots.detach().cpu().numpy(), low.detach().cpu().numpy()
+            )
+            official_delta = torch.as_tensor(
+                delta, device=self.device, dtype=torch.float32
+            )
+            terminal = torch.tensor(
+                [r.match_over for r in results], device=self.device
+            )
+            # A competition timeout is a true finite-horizon terminal, not a truncation.
+            timeout = torch.zeros_like(terminal)
+            terminated = {a: terminal.clone() for a in AGENTS}
         done = terminal | timeout
         rewards, infos = {}, {}
         for role, agent in zip(ROLES, AGENTS, strict=True):
@@ -596,6 +631,26 @@ class MujocoSandbagEnv:
                 name: weight * fn(self, **params) * 0.02
                 for name, weight, fn, params in terms(agent)
             }
+            if self.official_rules:
+                fighter = AGENTS.index(agent)
+                # Keep locomotion/style assistance, remove legacy hit and height proxies.
+                self.reward_terms[agent] = {
+                    k: v
+                    for k, v in self.reward_terms[agent].items()
+                    if not any(token in k for token in ("hit", "terminate"))
+                }
+                self.reward_terms[agent]["official_score_delta"] = (
+                    official_delta[:, fighter] - official_delta[:, 1 - fighter]
+                )
+                self.reward_terms[agent]["official_outcome"] = torch.tensor(
+                    [
+                        0.0
+                        if not r.match_over or r.winner is None
+                        else (1.0 if r.winner == fighter else -1.0)
+                        for r in results
+                    ],
+                    device=self.device,
+                )
             rewards[agent] = sum(self.reward_terms[agent].values())
             infos[agent] = {
                 "time_outs": timeout & ~terminal,
@@ -606,6 +661,35 @@ class MujocoSandbagEnv:
             )
             infos[f"terminal_critic_{role}"] = self._critic(agent)
             self.metrics[agent] = {"fallen": low[:, AGENTS.index(agent)]}
+            if self.official_rules:
+                fighter = AGENTS.index(agent)
+                self.metrics[agent].update(
+                    official_score=torch.tensor(
+                        [r.score[fighter] for r in results], device=self.device
+                    ),
+                    official_hits=torch.tensor(
+                        [
+                            sum(
+                                e["type"] == "HIT"
+                                and e.get("actor") == fighter
+                                for e in r.events
+                            )
+                            for r in results
+                        ],
+                        device=self.device,
+                    ),
+                    official_ko=torch.tensor(
+                        [
+                            sum(
+                                e["type"] == "KO" and e.get("actor") == fighter
+                                for e in r.events
+                            )
+                            for r in results
+                        ],
+                        device=self.device,
+                    ),
+                    official_match_over=terminal.clone(),
+                )
         invalid = self._nonfinite_worlds(
             {
                 "physics": {

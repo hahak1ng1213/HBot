@@ -17,13 +17,14 @@ class Records(PreparedDataset):
         asset_identity=None,
         split="train",
         allow_empty=False,
+        dataset="interhuman",
     ):
         # Validate arrays when consumed, rather than decompressing every clip twice.
         super().__init__(
             manifest, asset_identity=asset_identity, validate_contents=False
         )
         self.select_sources(
-            split=split, dataset="interhuman", allow_empty=allow_empty
+            split=split, dataset=dataset, allow_empty=allow_empty
         )
         self.cached_index, self.cached = None, None
 

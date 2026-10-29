@@ -1,0 +1,33 @@
+{
+  "split": "validation",
+  "baseline_variant": "current_state",
+  "assets": "../../../thirdparties/HoloMotion_assets/holoboxing",
+  "lower": "../../../models/holomotion-v2",
+  "candidates": [
+    {
+      "id": "current_seed43",
+      "variant": "current_state",
+      "seed": 43,
+      "model": "../../../results/current_seed43.onnx",
+      "training_opponent_sha256": []
+    },
+    {
+      "id": "context_seed43",
+      "variant": "current_state_context",
+      "seed": 43,
+      "model": "../../../results/context_seed43.onnx",
+      "training_opponent_sha256": []
+    },
+    {
+      "id": "history_context_seed43",
+      "variant": "history10_context",
+      "seed": 43,
+      "model": "../../../results/history_context_seed43.onnx",
+      "training_opponent_sha256": []
+    }
+  ],
+  "opponents": [
+    {"id": "heldout_seed101", "model": "../../../results/heldout_seed101.onnx"},
+    {"id": "heldout_seed202", "model": "../../../results/heldout_seed202.onnx"}
+  ]
+}

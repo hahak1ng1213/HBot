@@ -56,6 +56,31 @@ def main(argv=None):
     )
     parser.add_argument("--opponent-pool-capacity", type=int, default=8)
     parser.add_argument("--opponent-refresh-updates", type=int, default=256)
+    parser.add_argument(
+        "--official-rules",
+        action="store_true",
+        help="Use the shared official referee; correctness-first CPU contact bridge",
+    )
+    parser.add_argument(
+        "--observation-mode", choices=("current_state", "history10")
+    )
+    parser.add_argument(
+        "--match-context",
+        action="store_true",
+        help="Enable time/score input for a new spherical RL stage",
+    )
+    parser.add_argument(
+        "--opponent-checkpoint",
+        action="append",
+        default=[],
+        type=_common.existing_path,
+    )
+    parser.add_argument(
+        "--prior-normalization-dataset",
+        choices=("interhuman", "robostriker"),
+        default="interhuman",
+        help="Measured training records for prior-only initialization; SL still requires InterHuman",
+    )
     parser.add_argument("--allow-resume-code-change", action="store_true")
     parser.add_argument(
         "--output",
@@ -75,6 +100,12 @@ def main(argv=None):
         help="PyTorch device after CUDA_VISIBLE_DEVICES remapping",
     )
     parser.add_argument("--num-envs", type=int)
+    parser.add_argument(
+        "--save-interval",
+        type=int,
+        default=1024,
+        help="Save candidate checkpoints every N PPO updates",
+    )
     args = parser.parse_args(argv)
     if not (
         args.supervised_checkpoint
@@ -85,8 +116,27 @@ def main(argv=None):
         parser.error("Initialization must be a checkpoint file")
     if args.allow_resume_code_change and not args.resume:
         parser.error("--allow-resume-code-change requires --resume")
+    if args.resume and (
+        args.observation_mode or args.match_context or args.opponent_checkpoint
+    ):
+        parser.error(
+            "Change observation or pool only in a new stage, not resume"
+        )
+    if args.match_context and not args.official_rules:
+        parser.error("--match-context requires --official-rules")
+    if args.opponent_checkpoint and args.training_mode != "selfplay":
+        parser.error("External opponents require selfplay")
+    if (
+        args.prior_normalization_dataset != "interhuman"
+        and not args.prior_checkpoint
+    ):
+        parser.error(
+            "--prior-normalization-dataset only applies to --prior-checkpoint"
+        )
     if args.updates <= 0:
         parser.error("--updates must be positive")
+    if args.save_interval <= 0:
+        parser.error("--save-interval must be positive")
     if args.opponent_pool_capacity < 2 or args.opponent_refresh_updates < 1:
         parser.error(
             "Opponent pool needs >=2 slots and a positive refresh interval"

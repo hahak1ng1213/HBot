@@ -18,7 +18,10 @@ def unpack_actor_observations(observations):
 def validate_statistics(state):
     """Reject finite but impossible statistics before changing a live policy."""
     for name, value in state.items():
-        if name.endswith(("_variance", "_var", "_std", "count")) and (value < 0).any():
+        if (
+            name.endswith(("_variance", "_var", "_std", "count"))
+            and (value < 0).any()
+        ):
             raise ValueError(f"Invalid saved normalization statistic: {name}")
         if name.endswith("until") and (value <= 0).any():
             raise ValueError(f"Invalid saved normalization cap: {name}")
@@ -71,7 +74,9 @@ class ActorNormalizer(nn.Module):
             or not torch.isfinite(current).all()
             or not torch.isfinite(task).all()
         ):
-            raise ValueError("Expected finite, aligned current self/task measurements")
+            raise ValueError(
+                "Expected finite, aligned current self/task measurements"
+            )
 
     def forward(self, batch):
         current, task, history = batch["self"], batch["task"], batch["history"]
@@ -87,13 +92,22 @@ class ActorNormalizer(nn.Module):
         def normalize(name, value):
             mean = getattr(self, name + "_mean").to(value.dtype)
             std = (
-                getattr(self, name + "_variance").clamp_min(1e-6).sqrt().to(value.dtype)
+                getattr(self, name + "_variance")
+                .clamp_min(1e-6)
+                .sqrt()
+                .to(value.dtype)
             )
             return ((value - mean) / std).clamp(-10, 10)
 
-        # Match context is accepted but deliberately unused by this experiment.
-        return torch.cat((
-            normalize("self", history.reshape(-1, 10, SELF_DIM)).flatten(1),
-            normalize("task", task)[..., -15:],
-            torch.zeros_like(current[..., :2]),
-        ), dim=-1)
+        # Context uses physical units; the actor applies its explicit scaling.
+        context = batch.get("context", torch.zeros_like(current[..., :2]))
+        return torch.cat(
+            (
+                normalize("self", history.reshape(-1, 10, SELF_DIM)).flatten(
+                    1
+                ),
+                normalize("task", task)[..., -15:],
+                context,
+            ),
+            dim=-1,
+        )

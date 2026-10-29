@@ -426,6 +426,27 @@ class CompetitionPhysics:
             ],
         )
 
+    def official_contacts(self):
+        from .official_referee import contact_records
+
+        contact = self.data.contact
+        count = int(wp.to_torch(self.data.nacon)[0])
+
+        def cpu(value):
+            return wp.to_torch(value)[:count].detach().cpu().numpy()
+
+        return contact_records(
+            self.host,
+            cpu(contact.worldid),
+            cpu(contact.geom),
+            cpu(contact.pos),
+            cpu(self.forces),
+            cpu(contact.frame)[:, 0],
+            cpu(contact.dist),
+            count,
+            self.num_envs,
+        )
+
     def reset(self, ids):
         mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         mask[ids] = True

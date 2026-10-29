@@ -1,5 +1,6 @@
 """Launch the existing PPO algorithm on competition XML physics."""
 
+import copy
 from dataclasses import replace
 
 from holoboxing.data.contract import CompetitionAssets
@@ -19,6 +20,7 @@ from holoboxing.training.scripts.common import prepare, write_json
 def train(args, config, *, time_budget=None):
     seed_everything(config.seed)
     identity = prepare(args)
+    identity["official_rules"] = args.official_rules
     assets = CompetitionAssets.load(args.assets)
     _, paths, _ = resolve_resources(args.assets, args.lower)
     reference = load_neutral_reference(
@@ -56,11 +58,15 @@ def train(args, config, *, time_budget=None):
         if saved["format"] == PRIOR_FORMAT:
             from holoboxing.training.supervised.data import Records
 
-            prior_records = Records(args.amp_motions / "manifest.json")
+            prior_records = Records(
+                args.amp_motions / "manifest.json",
+                dataset=args.prior_normalization_dataset,
+            )
             validation = Records(
                 args.amp_motions / "manifest.json",
                 split="validation",
                 allow_empty=True,
+                dataset=args.prior_normalization_dataset,
             )
             actor = actor_from_prior(
                 initialization, config, prior_records, validation
@@ -94,6 +100,7 @@ def train(args, config, *, time_budget=None):
         args.output / ".runtime",
         config.seed,
         standing_reference=standing,
+        official_rules=args.official_rules,
     )
     try:
         demo, motions = load_amp_motions(
@@ -138,10 +145,25 @@ def train(args, config, *, time_budget=None):
             runner.initialize_from_policy(args.policy_checkpoint)
         else:
             runner.initialize_from_prior(args.prior_checkpoint, prior_records)
+        if args.observation_mode or args.match_context:
+            if not hasattr(runner.policy, "policy_spec"):
+                raise ValueError(
+                    "Observation ablations require the spherical policy"
+                )
+            spec = runner.policy.policy_spec
+            if args.observation_mode:
+                spec["self_observation_mode"] = args.observation_mode
+            if args.match_context:
+                spec["match_context"] = True
+            for role in ("ego", "opponent"):
+                getattr(runner.policy, "taskpolicy_" + role).spec.update(spec)
+            runner.identity["frozen_representation"] = copy.deepcopy(spec)
+        for path in args.opponent_checkpoint:
+            runner.opponent_pool.add_checkpoint(path, runner.identity)
         runner.policy.enable_actor_cuda_graphs()
         result = runner.learn(
             args.updates,
-            save_interval=1024,
+            save_interval=args.save_interval,
             extra_save_interval=5000,
             time_budget=time_budget,
         )

@@ -29,6 +29,9 @@ class SphericalActor(nn.Module):
         self.decoder = copy.deepcopy(decoder).eval().requires_grad_(False)
         self.latent_policy = mlp(1095, 32, config.hidden_dims)
         self.spec = copy.deepcopy(spec)
+        # Zero initialization exactly preserves legacy outputs until context learns.
+        self.context_policy = nn.Linear(2, 32, bias=False)
+        nn.init.zeros_(self.context_policy.weight)
         if self.spec.get("self_observation_mode", "history10") not in (
             "history10",
             "current_state",
@@ -43,6 +46,12 @@ class SphericalActor(nn.Module):
             torch.ones(32, device=decoder.reference_mean.device),
         )
         self.check_frozen()
+
+    def _load_from_state_dict(self, state_dict, prefix, *args, **kwargs):
+        key = prefix + "context_policy.weight"
+        if key not in state_dict and not self.spec.get("match_context", False):
+            state_dict[key] = torch.zeros_like(self.context_policy.weight)
+        super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
 
     def train(self, mode=True):
         super().train(mode)
@@ -64,7 +73,16 @@ class SphericalActor(nn.Module):
                 ),
                 -1,
             )
-        return unit_vector(self.latent_policy(causal))
+        value = self.latent_policy(causal)
+        context = observations[..., -2:] / observations.new_tensor(
+            [60.0, 1000.0]
+        )
+        if not self.spec.get("match_context", False):
+            context = torch.zeros_like(context)
+        # Keep a zero gradient for disabled context so Adam checkpoints have
+        # complete moments without changing the legacy actor's outputs.
+        value = value + self.context_policy(context)
+        return unit_vector(value)
 
     def forward(self, observations):
         return self.decoder(self.latent(observations))
@@ -92,6 +110,12 @@ def actor_from_state(state, spec, config):
         }
     )
     actor = SphericalActor(decoder, config, spec)
+    state = dict(state)
+    if not spec.get("match_context", False):
+        state.setdefault(
+            "context_policy.weight",
+            torch.zeros_like(actor.context_policy.weight),
+        )
     actor.load_state_dict(state, strict=True)
     actor.check_frozen()
     return actor

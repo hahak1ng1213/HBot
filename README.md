@@ -12,6 +12,10 @@
 
 </div>
 
+## 中文项目导读
+
+首次阅读本仓库可从[项目与核心代码入门报告](docs/project_beginner_guide.zh-CN.md)开始，了解模块分工、高低层控制、数据与学习流程，以及首次模型提交步骤。当前拳击扩展的操作说明见[规则对齐与独立评测工作流](docs/boxing_competition_workflow.zh-CN.md)。
+
 # Latest News
 
 - [2026.10.24] 🚀 **We now support [SuperMimic](docs/supermimic.md) in HoloMotion!** Train G1 motion trackers from scratch on **a single GPU**, with **MuJoCo Warp or Isaac PhysX**. We achieved **80% SR on LAFAN1 in 30 minutes on a single RTX 5090**.

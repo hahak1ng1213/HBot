@@ -44,6 +44,85 @@ class OpponentPool:
             ),
         }
 
+    def add_checkpoint(self, path, identity):
+        """Import a trusted, compatible frozen opponent and retain it on eviction."""
+        from holoboxing.training.rsl_rl.runners.resume import (
+            validate_module_state,
+        )
+        from holoboxing.training.rsl_rl.modules.normalization import (
+            validate_statistics,
+        )
+        from holoboxing.training.rsl_rl.algorithms.ppo import require_finite
+        from holoboxing.evaluation.runtime.model_contract import sha256
+
+        if self.selected is not None:
+            raise ValueError("Import opponents before the first rollout")
+        saved = torch.load(path, map_location="cpu", weights_only=False)
+        if saved.get("identity", {}).get("resources") != identity["resources"]:
+            raise ValueError("Opponent resources differ")
+        if saved.get("policy_spec") != getattr(
+            self.policy, "policy_spec", None
+        ):
+            raise ValueError(
+                "Opponent representation/observation contract differs"
+            )
+        actor = {
+            k.removeprefix("taskpolicy_ego."): v
+            for k, v in saved["policy"].items()
+            if k.startswith("taskpolicy_ego.")
+        }
+        norm = {
+            k.removeprefix("actor_ego."): v
+            for k, v in saved["normalizers"].items()
+            if k.startswith("actor_ego.")
+        }
+        if hasattr(
+            self.policy.taskpolicy_opponent, "context_policy"
+        ) and not self.policy.policy_spec.get("match_context", False):
+            actor.setdefault(
+                "context_policy.weight",
+                torch.zeros_like(
+                    self.policy.taskpolicy_opponent.context_policy.weight
+                ).cpu(),
+            )
+        require_finite((actor, norm), "external opponent")
+        validate_module_state(
+            self.policy.taskpolicy_opponent, actor, "opponent"
+        )
+        for (
+            name,
+            value,
+        ) in self.policy.taskpolicy_opponent.state_dict().items():
+            if name.startswith("decoder.") and not torch.equal(
+                actor[name].to(value), value
+            ):
+                raise ValueError("Opponent frozen decoder differs")
+        validate_module_state(
+            self.normalizers["actor_opponent"], norm, "opponent stats"
+        )
+        validate_statistics(norm)
+        if int(norm["count"]) <= 0:
+            raise ValueError("Opponent statistics must be fitted")
+        digest = state_sha256(
+            {**actor, **{"norm." + k: v for k, v in norm.items()}}
+        )
+        if any(x["sha256"] == digest for x in self.snapshots):
+            raise ValueError("Duplicate opponent")
+        if len(self.snapshots) >= self.capacity - 2:
+            raise ValueError(
+                "Reserve two pool slots for initial and recent learner"
+            )
+        self.snapshots.append(
+            dict(
+                iteration=0,
+                actor=actor,
+                normalizer=norm,
+                sha256=digest,
+                external=True,
+                checkpoint_sha256=sha256(path),
+            )
+        )
+
     def _install(self):
         snapshot = self.snapshots[self.selected]
         self.policy.taskpolicy_opponent.load_state_dict(
@@ -57,11 +136,20 @@ class OpponentPool:
         """Change at update boundaries; the caller resets physical episodes."""
         if self.selected is not None and iteration < self.next_refresh:
             return False
-        if not self.snapshots or self.snapshots[-1]["iteration"] != iteration:
+        if (
+            not self.snapshots
+            or self.snapshots[-1].get("external")
+            or self.snapshots[-1]["iteration"] != iteration
+        ):
             self.snapshots.append(self._snapshot(iteration))
             if len(self.snapshots) > self.capacity:
                 # Retain the initial opponent alongside recent history.
-                del self.snapshots[1]
+                dynamic = [
+                    i
+                    for i, x in enumerate(self.snapshots)
+                    if not x.get("external")
+                ]
+                del self.snapshots[dynamic[1]]
         self.selected = int(
             torch.randint(len(self.snapshots), (), generator=self.generator)
         )
@@ -101,7 +189,10 @@ class OpponentPool:
         if not isinstance(snapshots, list) or len(snapshots) > self.capacity:
             raise ValueError("Invalid self-play pool size")
         if selected is None:
-            if snapshots or state["next_refresh"] != 0:
+            if (
+                any(not x.get("external") for x in snapshots)
+                or state["next_refresh"] != 0
+            ):
                 raise ValueError("Invalid uninitialized self-play pool")
         elif type(selected) is not int or not 0 <= selected < len(snapshots):
             raise ValueError("Invalid selected self-play opponent")
@@ -132,7 +223,8 @@ class OpponentPool:
             iteration = snapshot["iteration"]
             if type(iteration) is not int or iteration < 0:
                 raise ValueError("Invalid self-play snapshot iteration")
-            iterations.append(iteration)
+            if not snapshot.get("external"):
+                iterations.append(iteration)
         if iterations != sorted(set(iterations)):
             raise ValueError("Self-play snapshot order differs")
         if type(state["next_refresh"]) is not int or state["next_refresh"] < 0:

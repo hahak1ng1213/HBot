@@ -59,7 +59,7 @@ def verify_scene(resources):
         allowed.update(
             (
                 resources.entries[side],
-                str(Path(resources.entries[side]).with_suffix(".urdf")),
+                Path(resources.entries[side]).with_suffix(".urdf").as_posix(),
             )
         )
     for item in resources.manifest["files"]:

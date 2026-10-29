@@ -42,6 +42,9 @@ class SphericalActorCritic(ActorCritic):
             mean.latent_policy.load_state_dict(
                 actor.latent_policy.state_dict()
             )
+            mean.context_policy.load_state_dict(
+                actor.context_policy.state_dict()
+            )
             setattr(self, f"taskpolicy_{role}", mean)
             setattr(
                 self, f"critic_{role}", mlp(CRITIC_DIM, 1, config.hidden_dims)

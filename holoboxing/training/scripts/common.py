@@ -28,6 +28,18 @@ def prepare(args):
             if "tests" not in path.parts
         },
     }
+    root = package.parents[1]
+    # The shared referee, observations and kinematics are part of a run's code,
+    # even though they live outside training/.
+    identity["shared_code"] = {
+        path.relative_to(root).as_posix(): sha256(path)
+        for directory in (
+            package.parent / "evaluation",
+            package.parent / "data",
+            root / "holomotion/src/motion_tracking",
+        )
+        for path in sorted(directory.rglob("*.py"))
+    }
     try:
         revision = subprocess.check_output(
             ["git", "-C", str(package), "rev-parse", "HEAD"], text=True
