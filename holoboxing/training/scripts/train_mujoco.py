@@ -1,10 +1,10 @@
 """Launch the existing PPO algorithm on competition XML physics."""
 
 import copy
-from dataclasses import replace
 
 from holoboxing.data.contract import CompetitionAssets
 from holoboxing.training.envs.mujoco_env import MujocoSandbagEnv
+from holoboxing.training.envs.mujoco_rewards import reward_recipe
 from holoboxing.training.resources import (
     load_neutral_reference,
     resolve_resources,
@@ -17,7 +17,7 @@ from holoboxing.training.rsl_rl.runners.on_policy_runner import (
 from holoboxing.training.scripts.common import prepare, write_json
 
 
-def train(args, config, *, time_budget=None):
+def train(args, config, *, time_budget=None, checkpoint=None):
     seed_everything(config.seed)
     identity = prepare(args)
     identity["official_rules"] = args.official_rules
@@ -48,14 +48,16 @@ def train(args, config, *, time_budget=None):
         or args.prior_checkpoint
         or args.policy_checkpoint
     )
-    saved = torch.load(initialization, map_location="cpu", weights_only=False)
+    saved = (
+        checkpoint
+        if checkpoint is not None
+        else torch.load(initialization, map_location="cpu", weights_only=False)
+    )
     if saved.get("format") in (
         PRIOR_FORMAT,
         IMITATION_FORMAT,
         LATENT_RL_FORMAT,
     ):
-        if not args.config:
-            config = replace(config, horizon_rho=0, init_noise_std=0.1)
         if saved["format"] == PRIOR_FORMAT:
             from holoboxing.training.supervised.data import Records
 
@@ -121,6 +123,9 @@ def train(args, config, *, time_budget=None):
                 "ordered_evaluation_physics": env.physics.ordered,
                 "contact_parameters": "competition XML, no material randomization",
                 "asset_identity": assets.identity(),
+                "reward_recipe": reward_recipe(
+                    official_rules=args.official_rules
+                ),
             },
         )
         runner = OnPolicyRunner(

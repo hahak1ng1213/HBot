@@ -34,7 +34,59 @@ def terminate_reward(env, asset_cfg, minimum_height):
     )
 
 
-def terms(agent):
+# These legacy proxies are replaced by the shared referee's score/outcome.
+# active_hit_shaping_reward is deliberately NOT here: it rewards a directed
+# punch before a scored contact and is essential dense exploration feedback.
+OFFICIAL_REPLACED_TERMS = frozenset(
+    {
+        "offensive_hit_reward_punch",
+        "defensive_hit_penalty_punch",
+        "terminate_reward",
+    }
+)
+
+
+def terms(agent, *, official_rules=False):
+    configured = _configured_terms(agent)
+    if official_rules:
+        return [
+            term
+            for term in configured
+            if term[0] not in OFFICIAL_REPLACED_TERMS
+        ]
+    return configured
+
+
+def reward_recipe(*, official_rules):
+    """Record effective weights, not just the unfiltered configuration."""
+    return {
+        "version": "official_dense_attack_v1"
+        if official_rules
+        else "legacy_sandbag",
+        "control_dt_s": 0.02,
+        "shaping_weights": {
+            agent: {
+                name: weight
+                for name, weight, _, _ in terms(
+                    agent, official_rules=official_rules
+                )
+            }
+            for agent in ("robot_A", "robot_B")
+        },
+        "referee_weights": {
+            "official_score_delta": 1.0,
+            "official_outcome": 1.0,
+        }
+        if official_rules
+        else {},
+        "referee_rewards_scaled_by_dt": False,
+        "replaced_terms": sorted(OFFICIAL_REPLACED_TERMS)
+        if official_rules
+        else [],
+    }
+
+
+def _configured_terms(agent):
     own = entity(agent)
     other = "robot_B" if agent == "robot_A" else "robot_A"
     sensor = entity("contact_sensor_" + agent)

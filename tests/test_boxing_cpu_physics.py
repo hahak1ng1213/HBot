@@ -164,6 +164,29 @@ def test_training_imports_without_warp():
     assert "mujoco_warp" not in sys.modules
 
 
+@pytest.mark.parametrize("speed,expected_score", [(0.0, 0), (5.0, 1)])
+def test_native_impact_scores_only_above_official_impulse(
+    physics, speed, expected_score
+):
+    from holoboxing.training.envs.official_referee import OfficialReferees
+
+    # Synthetic legal wrist/torso impact, using real mj_contactForce values.
+    # This verifies the CPU-to-referee path, not a learned policy's ability.
+    physics.data.qvel[:, 0] = speed
+    referee = OfficialReferees(2)
+    for _ in range(4):
+        physics.substep()
+        referee.sample(physics.official_contacts())
+    _, delta = referee.observe(
+        np.zeros((2, 2, 3)), np.zeros((2, 2), dtype=bool)
+    )
+    assert delta.tolist() == [[expected_score, 0], [expected_score, 0]]
+    impulse = referee.contact_metrics()["official_contact_impulse_max_ns"][
+        :, 0
+    ]
+    assert np.all(impulse >= 5) if expected_score else np.all(impulse < 5)
+
+
 def test_cpu_onnx_binding(tmp_path):
     import onnx
     from onnx import TensorProto, helper
@@ -268,6 +291,12 @@ def test_cpu_environment_control_reward_reset_and_push(
         assert all(
             "official_score_delta" in env.reward_terms[a] for a in AGENTS
         )
+        # Exercise the actual step/aggregation, not only the term registry.
+        attack = env.reward_terms["robot_A"]
+        assert "active_hit_shaping_reward" in attack
+        assert "offensive_hit_reward_punch" not in attack
+        assert "terminate_reward" not in attack
+        torch.testing.assert_close(reward["robot_A"], sum(attack.values()))
     assert env.physics.steps == 12
     env._reset(torch.tensor([0]))
     assert env.controllers
@@ -287,8 +316,10 @@ def test_cpu_measured_collection_uses_real_steps(
         def layout(model):
             names, roots, joints, points = original_layout(model)
             return (
-                names[::-1], roots,
-                [(qi[::-1], vi[::-1]) for qi, vi in joints], points,
+                names[::-1],
+                roots,
+                [(qi[::-1], vi[::-1]) for qi, vi in joints],
+                points,
             )
 
         monkeypatch.setattr(records, "scene_layout", layout)
@@ -307,11 +338,21 @@ def test_cpu_measured_collection_uses_real_steps(
 
         def __call__(self, **kwargs):
             for key, values, addresses in (
-                ("robot_joint_position", collector.scene.data.qpos, collector.joints[self.role][0]),
-                ("robot_joint_velocity", collector.scene.data.qvel, collector.joints[self.role][1]),
+                (
+                    "robot_joint_position",
+                    collector.scene.data.qpos,
+                    collector.joints[self.role][0],
+                ),
+                (
+                    "robot_joint_velocity",
+                    collector.scene.data.qvel,
+                    collector.joints[self.role][1],
+                ),
             ):
                 by_name = dict(zip(collector.names, values[addresses]))
-                expected = torch.tensor([[by_name[n] for n in JOINT_NAMES]], dtype=torch.float32)
+                expected = torch.tensor(
+                    [[by_name[n] for n in JOINT_NAMES]], dtype=torch.float32
+                )
                 torch.testing.assert_close(kwargs[key], expected)
             target = kwargs["robot_joint_position"] + torch.arange(29) * 0.001
             expected_targets[self.role] = target[0].clone()
@@ -344,7 +385,9 @@ def test_cpu_measured_collection_uses_real_steps(
     assert packet["target_pose"].shape == (10, 225)
     assert collector.physics.steps == 20
     for role in range(2):
-        torch.testing.assert_close(collector.physics.targets[0, role], expected_targets[role])
+        torch.testing.assert_close(
+            collector.physics.targets[0, role], expected_targets[role]
+        )
     assert record["collection_recipe"]["physics_backend"] == "mujoco_cpu"
     collector.close()
 

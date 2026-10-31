@@ -4,6 +4,8 @@
 
 [English](README.md) | 简体中文
 
+出现“训练完成但没有命中得分”时，先阅读 [进攻奖励修复与行为验收](../docs/boxing_score_recovery.zh-CN.md)。其中说明本版本修复、接触诊断指标、旧权重重新训练和模仿初始化的区别。
+
 <p align="center">
   <img src="../assets/media/holoboxing_highlights.webp" alt="仿真集锦：HoloBoxing长版本（21.4分钟）对阵RoboStriker" width="480">
   <br>

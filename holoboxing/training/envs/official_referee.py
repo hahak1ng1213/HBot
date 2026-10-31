@@ -46,6 +46,50 @@ class OfficialReferees:
             self.samples[i] = []
         return results, np.asarray(delta)
 
+    def contact_metrics(self):
+        """Summarize the last observed control frame without changing scoring.
+
+        Counts are legal hand/physics-step samples, not contact points or hits.
+        Multiple contact points on the same hand count once, including when
+        only one of those points carries the referee's HIT event. Impulse is
+        the referee's actual rolling, consumed-on-hit 20 ms normal impulse;
+        the peak is over hands and physics substeps in this control frame.
+        Call before resetting terminal worlds. Returned arrays own their data.
+        """
+        metrics = {
+            name: np.zeros((len(self.matches), 2), dtype=np.float64)
+            for name in (
+                "official_legal_contact_samples",
+                "official_subthreshold_contact_samples",
+                "official_cooldown_contact_samples",
+                "official_contact_impulse_max_ns",
+            )
+        }
+        for world, match in enumerate(self.matches):
+            samples = {}
+            for row in match.contact_diagnostics:
+                if row["hand"] not in ("left", "right"):
+                    continue
+                key = (row["actor"], row["hand"], row["physics_time_s"])
+                samples.setdefault(key, []).append(row)
+            for (actor, _, _), rows in samples.items():
+                metrics["official_legal_contact_samples"][world, actor] += 1
+                impulse = max(row["normal_impulse_ns"] for row in rows)
+                peak = metrics["official_contact_impulse_max_ns"]
+                peak[world, actor] = max(peak[world, actor], impulse)
+                if any(row["valid"] for row in rows):
+                    continue
+                reason = rows[0]["reason"]
+                if reason == "impulse_below_threshold":
+                    metrics["official_subthreshold_contact_samples"][
+                        world, actor
+                    ] += 1
+                elif reason == "hand_cooldown":
+                    metrics["official_cooldown_contact_samples"][
+                        world, actor
+                    ] += 1
+        return metrics
+
     def context(self):
         return np.asarray(
             [

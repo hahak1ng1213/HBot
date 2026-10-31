@@ -4,6 +4,8 @@
 
 English | [简体中文](README.zh-CN.md)
 
+For zero-hit training runs, see [attack reward fixes and behavioral validation](../docs/boxing_score_recovery.zh-CN.md). Existing checkpoints need evaluation and further training; updating the code alone does not improve their behavior.
+
 <p align="center">
   <img src="../assets/media/holoboxing_highlights.webp" alt="Simulation highlights: HoloBoxing long version (21.4 min) vs. RoboStriker" width="480">
   <br>

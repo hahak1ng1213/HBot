@@ -14,6 +14,49 @@ from holoboxing.training.time_budget import (
 )
 
 
+def resolve_training_config(args, checkpoint):
+    """Keep restart settings, but use stage-specific exploration for new actors."""
+    from holoboxing.training.motion_prior import FORMAT as PRIOR_FORMAT
+    from holoboxing.training.spherical_actor import FORMAT as IMITATION_FORMAT
+    from holoboxing.training.spherical_rl import FORMAT as LATENT_RL_FORMAT
+
+    if args.config:
+        config = TrainConfig(**json.loads(args.config.read_text()))
+    elif args.resume:
+        config = TrainConfig(**checkpoint["config"])
+    elif args.policy_checkpoint or args.supervised_checkpoint:
+        # Architecture and physical action mapping must match the saved actor.
+        config = TrainConfig(**checkpoint["config"])
+    else:
+        config = TrainConfig()
+
+    if not args.config and not args.resume:
+        changes = {"num_envs": 8}
+        if checkpoint.get("format") in (
+            PRIOR_FORMAT,
+            IMITATION_FORMAT,
+            LATENT_RL_FORMAT,
+        ):
+            changes.update(
+                horizon_rho=0,
+                init_noise_std=0.2
+                if args.training_mode == "selfplay"
+                else 0.1,
+            )
+        config = replace(config, **changes)
+    return replace(
+        config,
+        **{
+            key: value
+            for key, value in {
+                "num_envs": args.num_envs,
+                "seed": args.seed,
+            }.items()
+            if value is not None
+        },
+    )
+
+
 def main(argv=None):
     started_at = time.monotonic()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -107,8 +150,6 @@ def main(argv=None):
         help="Save candidate checkpoints every N PPO updates",
     )
     args = parser.parse_args(argv)
-    if args.num_envs is None and args.config is None and args.resume is None:
-        args.num_envs = 8
     if not (
         args.supervised_checkpoint
         or args.resume
@@ -147,17 +188,18 @@ def main(argv=None):
         budget = budget_from_arguments(args, started_at=started_at)
     except ValueError as error:
         parser.error(str(error))
-    config = (
-        TrainConfig(**json.loads(args.config.read_text()))
-        if args.config
-        else TrainConfig()
+    import torch
+
+    initialization = (
+        args.resume
+        or args.supervised_checkpoint
+        or args.prior_checkpoint
+        or args.policy_checkpoint
     )
-    changes = {
-        k: v
-        for k, v in {"num_envs": args.num_envs, "seed": args.seed}.items()
-        if v is not None
-    }
-    config = replace(config, **changes)
+    checkpoint = torch.load(
+        initialization, map_location="cpu", weights_only=False
+    )
+    config = resolve_training_config(args, checkpoint)
     args.num_envs, args.seed, args.action_dim = (
         config.num_envs,
         config.seed,
@@ -166,7 +208,7 @@ def main(argv=None):
     from holoboxing.training.scripts.train_mujoco import train
 
     with budget.handle_signals():
-        train(args, config, time_budget=budget)
+        train(args, config, time_budget=budget, checkpoint=checkpoint)
 
 
 if __name__ == "__main__":

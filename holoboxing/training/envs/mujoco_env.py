@@ -612,6 +612,7 @@ class MujocoSandbagEnv:
             results, delta = self.referees.observe(
                 roots.detach().cpu().numpy(), low.detach().cpu().numpy()
             )
+            contact_metrics = self.referees.contact_metrics()
             official_delta = torch.as_tensor(
                 delta, device=self.device, dtype=torch.float32
             )
@@ -626,16 +627,12 @@ class MujocoSandbagEnv:
         for role, agent in zip(ROLES, AGENTS, strict=True):
             self.reward_terms[agent] = {
                 name: weight * fn(self, **params) * 0.02
-                for name, weight, fn, params in terms(agent)
+                for name, weight, fn, params in terms(
+                    agent, official_rules=self.official_rules
+                )
             }
             if self.official_rules:
                 fighter = AGENTS.index(agent)
-                # Keep locomotion/style assistance, remove legacy hit and height proxies.
-                self.reward_terms[agent] = {
-                    k: v
-                    for k, v in self.reward_terms[agent].items()
-                    if not any(token in k for token in ("hit", "terminate"))
-                }
                 self.reward_terms[agent]["official_score_delta"] = (
                     official_delta[:, fighter] - official_delta[:, 1 - fighter]
                 )
@@ -686,6 +683,16 @@ class MujocoSandbagEnv:
                         device=self.device,
                     ),
                     official_match_over=terminal.clone(),
+                )
+                self.metrics[agent].update(
+                    {
+                        name: torch.tensor(
+                            values[:, fighter],
+                            device=self.device,
+                            dtype=torch.float32,
+                        )
+                        for name, values in contact_metrics.items()
+                    }
                 )
         invalid = self._nonfinite_worlds(
             {
