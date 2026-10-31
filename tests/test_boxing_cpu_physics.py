@@ -164,6 +164,52 @@ def test_training_imports_without_warp():
     assert "mujoco_warp" not in sys.modules
 
 
+@pytest.mark.parametrize("threads", [1, 2])
+def test_batched_control_interval_preserves_trajectory_and_contacts(
+    physics, monkeypatch, threads
+):
+    reference = physics
+    fast = physics_module.CompetitionPhysics(None, 2, "cpu", threads=threads)
+    fast.set_gains(torch.ones(29) * 20, torch.ones(29) * 2)
+    for frame in range(12):
+        if frame == 5:
+            for p in (reference, fast):
+                p.reset(torch.tensor([0]))
+                p.push(
+                    torch.tensor([1]), 0, torch.tensor([[0.3, 0, 0, 0, 0, 0]])
+                )
+        for p in (reference, fast):
+            p.targets[:] = 0.01 * frame
+        for substep in range(4):
+            reference.substep()
+            fast.substep(sync_input=substep == 0, sync_output=substep == 3)
+            for left, right in zip(reference.native, fast.native, strict=True):
+                np.testing.assert_array_equal(left.qpos, right.qpos)
+                np.testing.assert_array_equal(left.qvel, right.qvel)
+                np.testing.assert_array_equal(left.efc_force, right.efc_force)
+            assert reference.official_contacts() == fast.official_contacts()
+            torch.testing.assert_close(
+                reference.net_history, fast.net_history, rtol=0, atol=0
+            )
+            torch.testing.assert_close(
+                reference.paired_history, fast.paired_history, rtol=0, atol=0
+            )
+        for name in reference.fields:
+            torch.testing.assert_close(
+                getattr(reference.data, name),
+                getattr(fast.data, name),
+                rtol=0,
+                atol=0,
+            )
+        torch.testing.assert_close(
+            reference.joint_acceleration,
+            fast.joint_acceleration,
+            rtol=0,
+            atol=0,
+        )
+    fast.close()
+
+
 @pytest.mark.parametrize("speed,expected_score", [(0.0, 0), (5.0, 1)])
 def test_native_impact_scores_only_above_official_impulse(
     physics, speed, expected_score

@@ -153,6 +153,7 @@ class FrozenHoloMotionV2Controller:
         batch_size: int,
         scene_joint_names: Sequence[str],
         device: torch.device | str,
+        fk_cuda_graph: bool = False,
     ) -> None:
         if batch_size <= 0:
             raise ValueError("batch_size must be positive")
@@ -219,6 +220,11 @@ class FrozenHoloMotionV2Controller:
             dtype=torch.long,
             device=self.device,
         )
+        self._fk_call = self.fk
+        if fk_cuda_graph and self.device.type == "cuda":
+            from holoboxing.training.envs.cuda_graph import InferenceGraph
+
+            self._fk_call = InferenceGraph(self.fk)
 
         layout = link_actor_layout(
             self.config.link_observation,
@@ -320,7 +326,9 @@ class FrozenHoloMotionV2Controller:
         )
         actor_joint_position = robot_joint_position.to(self.device)
         actor_joint_velocity = robot_joint_velocity.to(self.device)
-        actual_position, actual_quaternion = self.fk(actor_joint_position)
+        actual_position, actual_quaternion = self._fk_call(
+            actor_joint_position
+        )
         actual_position = actual_position.index_select(
             1, self.command_body_indices
         )

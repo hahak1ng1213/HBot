@@ -112,6 +112,8 @@ def train(args, config, *, time_budget=None, checkpoint=None):
         official_rules=args.official_rules,
         distance_curriculum=args.distance_curriculum,
         rapid_approach=args.rapid_approach,
+        lower_cuda_graphs=args.lower_cuda_graphs,
+        physics_threads=args.physics_threads,
     )
     try:
         demo, motions = load_amp_motions(
@@ -126,6 +128,8 @@ def train(args, config, *, time_budget=None, checkpoint=None):
             args.output / "environment.json",
             {
                 "physics": "mujoco_cpu",
+                "lower_fk_cuda_graphs": args.lower_cuda_graphs,
+                "physics_threads": env.physics.thread_count,
                 "dt": 0.005,
                 "control_dt": 0.02,
                 "ordered_evaluation_physics": env.physics.ordered,

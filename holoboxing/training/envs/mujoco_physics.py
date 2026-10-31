@@ -7,6 +7,7 @@ kept intact while separate FK data supplies same-instant observations.
 """
 
 import copy
+from concurrent.futures import ThreadPoolExecutor, wait
 from types import SimpleNamespace
 
 import mujoco
@@ -47,9 +48,14 @@ class CompetitionPhysics:
         contact_capacity=None,
         constraint_capacity=None,
         ordered=None,
+        threads=1,
     ):
         if type(worlds) is not int or worlds < 1:
             raise ValueError("Physics requires positive worlds")
+        if type(threads) is not int or threads < 1:
+            raise ValueError("Physics threads must be positive")
+        self.thread_count = min(threads, worlds)
+        self._executor = None
         self.device = torch.device(device)
         self.num_envs = worlds
         self.host = load_scene_model(assets)
@@ -153,17 +159,67 @@ class CompetitionPhysics:
         self._contacts = [[] for _ in range(worlds)]
         self._pull()
 
-    def _pull(self, ids=None):
-        ids = list(range(self.num_envs)) if ids is None else ids
-        for name in self.fields:
-            values = np.stack(
-                [np.asarray(getattr(self.native[i], name)) for i in ids]
+    def close(self):
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
+    def _step_world(self, i):
+        m, d = self.models[i], self.native[i]
+        qi, vi, ai = self.indices
+        effort = (
+            self.kp * (self._native_targets[i] - d.qpos[qi])
+            - self.kd * d.qvel[vi]
+        )
+        d.ctrl[ai] = np.clip(effort, -self.limits, self.limits)
+        warnings = d.warning.number.copy()
+        mujoco.mj_step(m, d)
+        if np.any(d.warning.number > warnings):
+            raise RuntimeError(
+                f"MuJoCo solver warning in world {i}; inspect diagnostic_state"
             )
-            tensor = torch.as_tensor(values, device=self.device)
-            if not hasattr(self.data, name):
-                setattr(self.data, name, tensor.clone())
-            else:
-                getattr(self.data, name)[ids] = tensor
+
+    def _pull(self, ids=None):
+        # One host-to-device transfer, with persistent views for all fields.
+        # Preserve native float64 precision and writable qpos/qvel ownership.
+        if not hasattr(self, "_packed_state"):
+            self._field_layout = []
+            offset = 0
+            for name in self.fields:
+                shape = np.asarray(getattr(self.native[0], name)).shape
+                width = int(np.prod(shape))
+                self._field_layout.append(
+                    (name, shape, offset, offset + width)
+                )
+                offset += width
+            self._packed_host = np.empty(
+                (self.num_envs, offset), dtype=np.float64
+            )
+            self._packed_state = torch.empty(
+                (self.num_envs, offset),
+                dtype=torch.float64,
+                device=self.device,
+            )
+            for name, shape, start, end in self._field_layout:
+                setattr(
+                    self.data,
+                    name,
+                    self._packed_state[:, start:end].view(
+                        self.num_envs, *shape
+                    ),
+                )
+        rows = range(self.num_envs) if ids is None else ids
+        for i in rows:
+            for name, _, start, end in self._field_layout:
+                self._packed_host[i, start:end] = np.asarray(
+                    getattr(self.native[i], name)
+                ).reshape(-1)
+        if ids is None:
+            self._packed_state.copy_(torch.from_numpy(self._packed_host))
+        else:
+            self._packed_state[ids] = torch.as_tensor(
+                self._packed_host[ids], device=self.device
+            )
 
     def _push(self):
         # Explicit synchronization of only writable integration inputs.
@@ -224,25 +280,36 @@ class CompetitionPhysics:
         )
         self.forward()
 
-    def substep(self):
+    def substep(self, *, sync_input=True, sync_output=True):
         if self.kp is None:
             raise RuntimeError("Set controller gains before stepping")
-        self._push()
-        targets = self.targets.detach().cpu().numpy()
-        qi, vi, ai = self.indices
+        if sync_input:
+            self._push()
+            self._native_targets = self.targets.detach().cpu().numpy().copy()
+        vi = self.indices[1]
         previous = np.stack([d.qvel[vi].copy() for d in self.native])
-        for i, (m, d) in enumerate(zip(self.models, self.native, strict=True)):
-            effort = self.kp * (targets[i] - d.qpos[qi]) - self.kd * d.qvel[vi]
-            d.ctrl[ai] = np.clip(effort, -self.limits, self.limits)
-            warnings = d.warning.number.copy()
-            mujoco.mj_step(m, d)
-            # MuJoCo can auto-reset a divergent world. Never silently accept it.
-            if np.any(d.warning.number > warnings):
-                self._pull()
-                raise RuntimeError(
-                    f"MuJoCo solver warning in world {i}; inspect diagnostic_state"
-                )
-        self._pull()
+        try:
+            if self.thread_count == 1:
+                for i in range(self.num_envs):
+                    self._step_world(i)
+            else:
+                if self._executor is None:
+                    self._executor = ThreadPoolExecutor(
+                        max_workers=self.thread_count
+                    )
+                pending = [
+                    self._executor.submit(self._step_world, i)
+                    for i in range(self.num_envs)
+                ]
+                # Join all workers before reading data, even on failure.
+                wait(pending)
+                for future in pending:
+                    future.result()
+        except Exception:
+            self._pull()
+            raise
+        if sync_output:
+            self._pull()
         velocity = np.stack([d.qvel[vi] for d in self.native])
         self.joint_acceleration.copy_(
             torch.as_tensor(

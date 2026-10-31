@@ -158,6 +158,8 @@ class MujocoSandbagEnv:
         official_rules=False,
         distance_curriculum=False,
         rapid_approach=False,
+        lower_cuda_graphs=False,
+        physics_threads=1,
     ):
         self.device, self.num_envs = torch.device(device), worlds
         self.standing_reference = standing_reference
@@ -178,7 +180,9 @@ class MujocoSandbagEnv:
             from .official_referee import OfficialReferees
 
             self.referees = OfficialReferees(worlds)
-        self.physics = CompetitionPhysics(assets, worlds, device)
+        self.physics = CompetitionPhysics(
+            assets, worlds, device, threads=physics_threads
+        )
         self.scene = Scene({a: Robot() for a in AGENTS})
         self.scene.env_origins = torch.zeros((worlds, 3), device=device)
         self.scene.sensors = {}
@@ -236,6 +240,7 @@ class MujocoSandbagEnv:
                     lower_session=session,
                     robot_file_path=xml,
                     batch_size=worlds,
+                    fk_cuda_graph=lower_cuda_graphs,
                     scene_joint_names=JOINT_NAMES,
                     device=device,
                 )
@@ -605,8 +610,12 @@ class MujocoSandbagEnv:
             manager.prev_action.copy_(manager.action)
             manager.action.copy_(joint_actions[agent])
             self.physics.targets[:, role] = outputs["joint_target"][agent]
-        for _ in range(4):
-            self.physics.substep()
+        for substep in range(4):
+            # Targets stay fixed over the control interval. Keep integration
+            # on CPU between substeps; sample every contact for the referee.
+            self.physics.substep(
+                sync_input=substep == 0, sync_output=substep == 3
+            )
             if self.official_rules:
                 self.referees.sample(self.physics.official_contacts())
         self._sim_step_counter += 4
@@ -799,6 +808,7 @@ class MujocoSandbagEnv:
         return observations, rewards, done, infos
 
     def close(self):
+        self.physics.close()
         if self.device.type == "cuda":
             torch.cuda.synchronize(self.device)
 

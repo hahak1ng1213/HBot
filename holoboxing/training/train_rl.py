@@ -144,6 +144,17 @@ def main(argv=None):
     )
     parser.add_argument("--num-envs", type=int)
     parser.add_argument(
+        "--physics-threads",
+        type=int,
+        default=1,
+        help="CPU workers stepping independent MuJoCo worlds",
+    )
+    parser.add_argument(
+        "--lower-cuda-graphs",
+        action="store_true",
+        help="Capture frozen lower-controller FK preprocessing on CUDA",
+    )
+    parser.add_argument(
         "--distance-curriculum",
         action="store_true",
         help="Standing training: scored bouts unlock 1.0/1.4/1.8 m then normal resets",
@@ -160,6 +171,8 @@ def main(argv=None):
         help="Save candidate checkpoints every N PPO updates",
     )
     args = parser.parse_args(argv)
+    if args.physics_threads < 1:
+        parser.error("--physics-threads must be positive")
     if args.distance_curriculum and (
         not args.official_rules or args.training_mode != "standing"
     ):
