@@ -22,6 +22,12 @@ def train(args, config, *, time_budget=None, checkpoint=None):
     identity = prepare(args)
     identity["official_rules"] = args.official_rules
     identity["physics_backend"] = "mujoco_cpu"
+    if args.distance_curriculum or args.rapid_approach:
+        identity["attack_training"] = dict(
+            distance_curriculum=args.distance_curriculum,
+            rapid_approach=args.rapid_approach,
+            version=1,
+        )
     assets = CompetitionAssets.load(args.assets)
     _, paths, _ = resolve_resources(args.assets, args.lower)
     reference = load_neutral_reference(
@@ -104,6 +110,8 @@ def train(args, config, *, time_budget=None, checkpoint=None):
         config.seed,
         standing_reference=standing,
         official_rules=args.official_rules,
+        distance_curriculum=args.distance_curriculum,
+        rapid_approach=args.rapid_approach,
     )
     try:
         demo, motions = load_amp_motions(
@@ -124,7 +132,8 @@ def train(args, config, *, time_budget=None, checkpoint=None):
                 "contact_parameters": "competition XML, no material randomization",
                 "asset_identity": assets.identity(),
                 "reward_recipe": reward_recipe(
-                    official_rules=args.official_rules
+                    official_rules=args.official_rules,
+                    rapid_approach=args.rapid_approach,
                 ),
             },
         )

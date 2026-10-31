@@ -253,8 +253,9 @@ def fake_lower_setup(monkeypatch):
     )
 
 
+@pytest.mark.parametrize("curriculum", [False, True])
 def test_cpu_environment_control_reward_reset_and_push(
-    physics, monkeypatch, tmp_path
+    physics, monkeypatch, tmp_path, curriculum
 ):
     from holoboxing.training.envs.mujoco_env import MujocoSandbagEnv
     from holoboxing.training.tasks.combat.config.sandbag import AGENTS, POINTS
@@ -268,11 +269,24 @@ def test_cpu_environment_control_reward_reset_and_push(
         "cpu",
         tmp_path,
         official_rules=True,
+        distance_curriculum=curriculum,
+        rapid_approach=curriculum,
     )
     obs = env.reset()
     for a in AGENTS:
         assert obs[a]["task_policy"].shape == (2, 1097)
     state = env.physics.state()
+    if curriculum:
+        torch.testing.assert_close(
+            torch.linalg.vector_norm(
+                state["position"][:, 0, 0, :2]
+                - state["position"][:, 1, 0, :2],
+                dim=-1,
+            ),
+            torch.ones(2),
+            atol=1e-5,
+            rtol=0,
+        )
     ids = [BODY_NAMES.index(n) for n in POINTS]
     p, q = state["position"][:, :, ids], state["quaternion"][:, :, ids]
     actions = {

@@ -46,8 +46,40 @@ OFFICIAL_REPLACED_TERMS = frozenset(
 )
 
 
-def terms(agent, *, official_rules=False):
+def terms(agent, *, official_rules=False, rapid_approach=False):
     configured = _configured_terms(agent)
+    if rapid_approach and agent == "robot_A":
+        weights = {
+            "facing_reward": 0.15,
+            "active_hit_shaping_reward": 3.0,
+            "action_rate_l2": -0.02,
+            "energy_saving_penalty": -2e-6,
+        }
+        configured = [
+            (
+                n,
+                weights.get(n, w),
+                f,
+                dict(p, sigma=0.5, target_speed=2.0)
+                if n == "active_hit_shaping_reward"
+                else p,
+            )
+            for n, w, f, p in configured
+            if n != "vel_reward"
+        ]
+        configured.append(
+            (
+                "rapid_approach_reward",
+                2.0,
+                rewards.rapid_approach_reward,
+                dict(
+                    asset_cfg=entity(agent),
+                    attack_distance=0.9,
+                    far_distance=1.5,
+                    target_speed=1.0,
+                ),
+            )
+        )
     if official_rules:
         return [
             term
@@ -57,18 +89,28 @@ def terms(agent, *, official_rules=False):
     return configured
 
 
-def reward_recipe(*, official_rules):
+def reward_recipe(*, official_rules, rapid_approach=False):
     """Record effective weights, not just the unfiltered configuration."""
     return {
-        "version": "official_dense_attack_v1"
+        "version": "rapid_approach_v1"
+        if rapid_approach
+        else "official_dense_attack_v1"
         if official_rules
         else "legacy_sandbag",
         "control_dt_s": 0.02,
+        "speed_targets_mps": {
+            "far_approach": 1.0,
+            "relative_directed_punch": 2.0,
+        }
+        if rapid_approach
+        else {},
         "shaping_weights": {
             agent: {
                 name: weight
                 for name, weight, _, _ in terms(
-                    agent, official_rules=official_rules
+                    agent,
+                    official_rules=official_rules,
+                    rapid_approach=rapid_approach,
                 )
             }
             for agent in ("robot_A", "robot_B")

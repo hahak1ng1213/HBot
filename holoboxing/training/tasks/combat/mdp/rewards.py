@@ -22,12 +22,14 @@ def _contact_body_names(sensor):
     return names
 
 
-def paired_contact_forces(env, attacker, defender, attacker_sensor, defender_sensor):
+def paired_contact_forces(
+    env, attacker, defender, attacker_sensor, defender_sensor
+):
     """Use named wrist filters, never coincident unrelated net contacts."""
     sensors = env.scene.sensors
-    force = sensors[f"contact_sensor_{defender}_torso"].data.force_matrix_w_history[
-        :, :, 0
-    ]
+    force = sensors[
+        f"contact_sensor_{defender}_torso"
+    ].data.force_matrix_w_history[:, :, 0]
     if force.shape[2:] != (2, 3):
         raise ValueError("Expected paired wrist-to-torso force history")
     attack_sensor, defend_sensor = (
@@ -37,7 +39,9 @@ def paired_contact_forces(env, attacker, defender, attacker_sensor, defender_sen
     attack = torch.zeros_like(attack_sensor.data.net_forces_w_history)
     defend = torch.zeros_like(defend_sensor.data.net_forces_w_history)
     for i, name in enumerate(("left_wrist_yaw_link", "right_wrist_yaw_link")):
-        attack[:, :, _contact_body_names(attack_sensor).index(name)] = force[:, :, i]
+        attack[:, :, _contact_body_names(attack_sensor).index(name)] = force[
+            :, :, i
+        ]
     defend[:, :, _contact_body_names(defend_sensor).index("torso_link"), 2] = (
         force.norm(dim=-1).sum(dim=-1)
     )
@@ -84,21 +88,21 @@ def offensive_hit_reward_punch(
     threshold: float = 1.0,
     vel_threshold: float = 1.0,
     relative_by_ego: bool = True,
-) -> (
-    torch.Tensor
-):  # The relative-velocity threshold can be lower because base velocity is subtracted.
+) -> torch.Tensor:  # The relative-velocity threshold can be lower because base velocity is subtracted.
     """
     relative_by_ego: True use self torso velocity to compute relative velocity; False use opponent torso velocity to compute relative velocity.
     """
     ego_agent = env.scene[asset_cfg.name]
     opponent_agent = env.get_opponent(asset_cfg.name)
 
-    net_contact_forces_ego, net_contact_forces_opponent = paired_contact_forces(
-        env,
-        asset_cfg.name,
-        env.get_opponent_id(asset_cfg.name),
-        sensor_cfg1.name,
-        sensor_cfg2.name,
+    net_contact_forces_ego, net_contact_forces_opponent = (
+        paired_contact_forces(
+            env,
+            asset_cfg.name,
+            env.get_opponent_id(asset_cfg.name),
+            sensor_cfg1.name,
+            sensor_cfg2.name,
+        )
     )
 
     # --- 1. Get key link indices. ---
@@ -300,21 +304,21 @@ def defensive_hit_penalty_punch(
     threshold: float = 1.0,
     vel_threshold: float = 1.0,
     relative_by_ego: bool = True,
-) -> (
-    torch.Tensor
-):  # The relative-velocity threshold can be lower because base velocity is subtracted.
+) -> torch.Tensor:  # The relative-velocity threshold can be lower because base velocity is subtracted.
     """
     relative_by_ego: True use self torso velocity to compute relative velocity; False use opponent torso velocity to compute relative velocity.
     """
     ego_agent = env.scene[asset_cfg.name]
     opponent_agent = env.get_opponent(asset_cfg.name)
 
-    net_contact_forces_opponent, net_contact_forces_ego = paired_contact_forces(
-        env,
-        env.get_opponent_id(asset_cfg.name),
-        asset_cfg.name,
-        sensor_cfg1.name,
-        sensor_cfg2.name,
+    net_contact_forces_opponent, net_contact_forces_ego = (
+        paired_contact_forces(
+            env,
+            env.get_opponent_id(asset_cfg.name),
+            asset_cfg.name,
+            sensor_cfg1.name,
+            sensor_cfg2.name,
+        )
     )
 
     # --- 1. Get key link indices. ---
@@ -351,8 +355,12 @@ def defensive_hit_penalty_punch(
     r_dir_vec = ego_torso_pos - r_wrist_pos
 
     # Normalize direction vectors.
-    l_dir_norm = l_dir_vec / (torch.norm(l_dir_vec, dim=-1, keepdim=True) + 1e-6)
-    r_dir_norm = r_dir_vec / (torch.norm(r_dir_vec, dim=-1, keepdim=True) + 1e-6)
+    l_dir_norm = l_dir_vec / (
+        torch.norm(l_dir_vec, dim=-1, keepdim=True) + 1e-6
+    )
+    r_dir_norm = r_dir_vec / (
+        torch.norm(r_dir_vec, dim=-1, keepdim=True) + 1e-6
+    )
     # --- 5. Compute effective attack velocity by projection. ---
     # The dot product is large only when relative velocity points toward the opponent.
     # dim: [Batch]
@@ -366,7 +374,9 @@ def defensive_hit_penalty_punch(
     # Check whether the ego torso and opponent fists receive force.
     is_ego_torso_hit = (
         torch.max(
-            torch.norm(net_contact_forces_ego[:, :, sensor_cfg2.body_ids[2]], dim=-1),
+            torch.norm(
+                net_contact_forces_ego[:, :, sensor_cfg2.body_ids[2]], dim=-1
+            ),
             dim=1,
         )[0]
         > threshold
@@ -395,10 +405,14 @@ def defensive_hit_penalty_punch(
     # Criterion: ego is hit and the hand has explosive relative velocity toward ego.
     if relative_by_ego:
         is_l_valid_hit = (
-            is_ego_torso_hit & is_opp_lwrist_hit & (l_effective_speed > vel_threshold)
+            is_ego_torso_hit
+            & is_opp_lwrist_hit
+            & (l_effective_speed > vel_threshold)
         )
         is_r_valid_hit = (
-            is_ego_torso_hit & is_opp_rwrist_hit & (r_effective_speed > vel_threshold)
+            is_ego_torso_hit
+            & is_opp_rwrist_hit
+            & (r_effective_speed > vel_threshold)
         )
     else:
         is_l_valid_hit = (
@@ -437,9 +451,9 @@ def balance_reward(
     # Torso uprightness: dot product between the z axis and gravity direction.
     torso_idx = ego_agent.body_names.index("torso_link")
     torso_quat = ego_agent.data.body_quat_w[:, torso_idx]
-    up_vector = torch.tensor([0, 0, 1], dtype=torch.float, device=env.device).repeat(
-        torso_quat.shape[0], 1
-    )
+    up_vector = torch.tensor(
+        [0, 0, 1], dtype=torch.float, device=env.device
+    ).repeat(torso_quat.shape[0], 1)
 
     # Extract orientation from the quaternion.
     torso_up = quat_apply(torso_quat, up_vector)
@@ -472,7 +486,9 @@ def distance_penalty(
     ego_agent = env.scene[asset_cfg.name]
     opponent_agent = env.get_opponent(asset_cfg.name)
     torso_index = ego_agent.body_names.index("torso_link")
-    ego_agent_torso_pos = ego_agent.data.body_pos_w[:, torso_index : torso_index + 1]
+    ego_agent_torso_pos = ego_agent.data.body_pos_w[
+        :, torso_index : torso_index + 1
+    ]
     opponent_agent_torso_pos = opponent_agent.data.body_pos_w[
         :, torso_index : torso_index + 1
     ]
@@ -532,7 +548,9 @@ def facing_reward(
     ego_root_pos = ego_agent.data.root_pos_w
     ego_root_quat = ego_agent.data.root_quat_w
     opponent_target_idx = opponent_agent.body_names.index(target_body_name)
-    opponent_target_pos = opponent_agent.data.body_pos_w[:, opponent_target_idx]
+    opponent_target_pos = opponent_agent.data.body_pos_w[
+        :, opponent_target_idx
+    ]
 
     tar_dir_3d = opponent_target_pos - ego_root_pos
     tar_dir_3d[:, 2] = 0.0
@@ -540,6 +558,34 @@ def facing_reward(
     tar_dir_local = quat_apply_inverse(ego_root_quat, tar_dir_3d)
     rew = torch.exp(-(1 - tar_dir_local[:, 0]) / sigma)
     return rew
+
+
+def approach_state(env, asset_cfg):
+    own = env.scene[asset_cfg.name].data
+    other = env.get_opponent(asset_cfg.name).data
+    offset = other.root_pos_w[:, :2] - own.root_pos_w[:, :2]
+    distance = torch.linalg.vector_norm(offset, dim=-1)
+    direction = offset / distance.clamp_min(1e-6)[:, None]
+    speed = (own.root_lin_vel_w[:, :2] * direction).sum(-1)
+    return distance, speed
+
+
+def rapid_approach_reward(
+    env, asset_cfg, attack_distance=0.9, far_distance=1.5, target_speed=1.0
+):
+    """Reward own forward speed far away; fade out before punching range.
+
+    Linear feedback rewards small improvements from a crawl. Excess speed
+    reduces reward instead of making a high-speed body collision optimal.
+    Opponent motion cannot earn approach reward for a stationary learner.
+    """
+    distance, speed = approach_state(env, asset_cfg)
+    gate = (
+        (distance - attack_distance) / (far_distance - attack_distance)
+    ).clamp(0, 1)
+    ratio = speed / target_speed
+    speed_reward = ratio.clamp(max=1) - (ratio - 1).clamp_min(0).square()
+    return gate * speed_reward.clamp(-1, 1)
 
 
 def vel_reward(
@@ -555,7 +601,9 @@ def vel_reward(
     ego_root_pos = ego_agent.data.root_pos_w
     ego_root_vel = ego_agent.data.root_lin_vel_w
     opponent_target_idx = opponent_agent.body_names.index(target_body_name)
-    opponent_target_pos = opponent_agent.data.body_pos_w[:, opponent_target_idx]
+    opponent_target_pos = opponent_agent.data.body_pos_w[
+        :, opponent_target_idx
+    ]
 
     tar_dir_2d = opponent_target_pos[..., :2] - ego_root_pos[..., :2]
     tar_dir_2d = torch.nn.functional.normalize(tar_dir_2d, dim=-1)
@@ -574,14 +622,18 @@ def strike_reward(
     env,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     sensor_cfg_ego: SceneEntityCfg = SceneEntityCfg("contact_sensor"),
-    sensor_cfg_opponent: SceneEntityCfg = SceneEntityCfg("contact_sensor_opponent"),
+    sensor_cfg_opponent: SceneEntityCfg = SceneEntityCfg(
+        "contact_sensor_opponent"
+    ),
     target_body_weights: list[float] = [1.0],
 ) -> torch.Tensor:
     ego = asset_cfg.name
     opponent = env.get_opponent_id(ego)
     forces = []
     for agent in (ego, opponent):
-        force = env.scene.sensors[f"contact_sensor_{agent}_torso"].data.force_matrix_w
+        force = env.scene.sensors[
+            f"contact_sensor_{agent}_torso"
+        ].data.force_matrix_w
         if force.shape[1:] != (1, 2, 3):
             raise ValueError("Expected two filtered wrist-to-torso forces")
         forces.append(force[:, 0].sum(dim=1).norm(dim=-1))
@@ -606,7 +658,9 @@ def hit_reward(
     ego_agent = env.scene[asset_cfg.name]
     opponent_agent = env.get_opponent(asset_cfg.name)
 
-    ego_body_ids = [ego_agent.body_names.index(name) for name in hit_body_names]
+    ego_body_ids = [
+        ego_agent.body_names.index(name) for name in hit_body_names
+    ]
     target_body_ids = [
         opponent_agent.body_names.index(name) for name in target_body_names
     ]
@@ -618,7 +672,9 @@ def hit_reward(
     hit_dist = ego_wrist_pos.unsqueeze(2) - opponent_target_pos.unsqueeze(
         1
     )  # [B, 2, T, 3]
-    hit_dist = torch.norm(hit_dist, dim=-1).reshape(hit_dist.shape[0], -1)  # [B, 2*T]
+    hit_dist = torch.norm(hit_dist, dim=-1).reshape(
+        hit_dist.shape[0], -1
+    )  # [B, 2*T]
     rew = torch.exp(-torch.mean(hit_dist, dim=-1) / sigma)
     return rew
 
@@ -634,6 +690,7 @@ def active_hit_shaping_reward(
     sigma: float = 1.0,
     vel_threshold: float = 0.8,
     gate_temperature: float = 10.0,
+    target_speed: float | None = None,
 ) -> torch.Tensor:
     """Distance shaping gated by *self* punching speed towards the opponent.
 
@@ -652,30 +709,46 @@ def active_hit_shaping_reward(
     torso_idx = ego_agent.body_names.index("torso_link")
     ego_torso_vel = ego_agent.data.body_vel_w[:, torso_idx, :3]  # [B, 3]
 
-    ego_body_ids = [ego_agent.body_names.index(name) for name in hit_body_names]
+    ego_body_ids = [
+        ego_agent.body_names.index(name) for name in hit_body_names
+    ]
     target_body_ids = [
         opponent_agent.body_names.index(name) for name in target_body_names
     ]
 
     wrist_pos = ego_agent.data.body_pos_w[:, ego_body_ids, :3]  # [B, H, 3]
     wrist_vel = (
-        ego_agent.data.body_vel_w[:, ego_body_ids, :3] - ego_torso_vel[:, None, :]
+        ego_agent.data.body_vel_w[:, ego_body_ids, :3]
+        - ego_torso_vel[:, None, :]
     )
 
-    targets_pos = opponent_agent.data.body_pos_w[:, target_body_ids, :3]  # [B, T, 3]
+    targets_pos = opponent_agent.data.body_pos_w[
+        :, target_body_ids, :3
+    ]  # [B, T, 3]
 
     # Vector from wrist -> target
     diff = targets_pos.unsqueeze(1) - wrist_pos.unsqueeze(2)  # [B, H, T, 3]
     dist = torch.norm(diff, dim=-1)  # [B, H, T]
     min_dist = torch.min(dist, dim=-1)[0]  # [B, H]
 
-    dir_norm = diff / (torch.norm(diff, dim=-1, keepdim=True) + 1e-6)  # [B, H, T, 3]
+    dir_norm = diff / (
+        torch.norm(diff, dim=-1, keepdim=True) + 1e-6
+    )  # [B, H, T, 3]
     # Project wrist relative velocity onto directions towards targets
-    proj_speed = torch.sum(wrist_vel.unsqueeze(2) * dir_norm, dim=-1)  # [B, H, T]
+    proj_speed = torch.sum(
+        wrist_vel.unsqueeze(2) * dir_norm, dim=-1
+    )  # [B, H, T]
     best_proj_speed = torch.max(proj_speed, dim=-1)[0]  # [B, H]
 
     # Smooth gate: ~0 when speed below threshold, ~1 when above.
-    gate = torch.sigmoid((best_proj_speed - vel_threshold) * gate_temperature)  # [B, H]
+    if target_speed is None:
+        gate = torch.sigmoid(
+            (best_proj_speed - vel_threshold) * gate_temperature
+        )
+    else:
+        # Keep rewarding faster directed punches up to the training target;
+        # the legacy sigmoid already saturates around 1.2 m/s.
+        gate = (best_proj_speed / target_speed).clamp(0, 1)
 
     # Distance shaping (per hand), gated by active punching motion.
     hand_reward = torch.exp(-min_dist / sigma) * gate  # [B, H]

@@ -134,6 +134,7 @@ def test_failed_save_preserves_last_valid_checkpoint_and_has_no_completion(
 
 def runner_at_update_boundary(output, clock):
     runner = OnPolicyRunner.__new__(OnPolicyRunner)
+    runner.env = SimpleNamespace(distance_curriculum=None)
     runner.output = output
     runner.iteration = runner.transitions_per_role = (
         runner.invalid_transitions

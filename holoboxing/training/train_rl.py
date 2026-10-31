@@ -144,12 +144,31 @@ def main(argv=None):
     )
     parser.add_argument("--num-envs", type=int)
     parser.add_argument(
+        "--distance-curriculum",
+        action="store_true",
+        help="Standing training: scored bouts unlock 1.0/1.4/1.8 m then normal resets",
+    )
+    parser.add_argument(
+        "--rapid-approach",
+        action="store_true",
+        help="Distance-gated approach/attack rewards; also enabled by distance curriculum",
+    )
+    parser.add_argument(
         "--save-interval",
         type=int,
         default=1024,
         help="Save candidate checkpoints every N PPO updates",
     )
     args = parser.parse_args(argv)
+    if args.distance_curriculum and (
+        not args.official_rules or args.training_mode != "standing"
+    ):
+        parser.error(
+            "--distance-curriculum requires --official-rules --training-mode standing"
+        )
+    if args.rapid_approach and not args.official_rules:
+        parser.error("--rapid-approach requires --official-rules")
+    args.rapid_approach = args.rapid_approach or args.distance_curriculum
     if not (
         args.supervised_checkpoint
         or args.resume

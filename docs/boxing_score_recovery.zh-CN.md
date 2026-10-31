@@ -1,5 +1,33 @@
 # CPU 拳击训练的进攻奖励修复与验收
 
+## 距离课程与快速进攻
+
+新增训练开关 `--distance-curriculum`（需要 `--training-mode standing --official-rules`）。训练从骨盆水平间距 1.0 m 开始，依次为 1.4 m、1.8 m，最后恢复原训练环境的初始位置及扰动。仅改变重置时双方的水平位置，保持中点、朝向、高度及关节姿态；对手重新锚定站立目标。正式 Docker 场景不修改。
+
+升级依据是最近 16 个完整回合：至少 12 局有学习方正式 HIT，最多 1 局出现学习方倒地或无效状态。仅 KO、辅助奖励、未完成回合及旧距离的在途回合不能作为新距离的升级证据。课程状态随检查点保存，续训保留阶段和已完成回合；仿真中的未完成回合重新开始。每局仍为 60 秒，未达标就停留当前难度。
+
+课程自动启用 `--rapid-approach` 奖励配置，也可以在普通站立或自博弈训练单独使用该开关：
+
+- 距离 ≥1.5 m 时，朝向对手的自身前进速度以 1 m/s 为训练目标；从慢速到目标速度获得逐渐增加的奖励，后退扣分，超速降低奖励。
+- 0.9～1.5 m 之间逐渐减弱接近奖励；进入 0.9 m 后不再用此项鼓励向前冲撞。距离以双方骨盆水平距离定义，不是手部到目标的距离。
+- 主动出拳奖励扣除自身躯干平移，使用朝目标方向的手部相对速度。在 0～2 m/s 范围持续奖励更快出拳，超过目标速度不继续加分；离目标越远奖励越小，挥向反方向不奖励。
+- 降低持续朝向、动作变化和能耗项对进攻探索的压制：朝向权重 0.15，主动出拳 3.0，快速接近 2.0，动作变化 -0.02，能耗 -2e-6。完整参数见 `mujoco_rewards.py`，运行时写入 `environment.json`。
+
+这些速度和权重是待训练验证的初始设置，不是模型已具备的能力。速度加快不保证达到 5 N·s，最终仍以真实接触冲量和官方 HIT 为准。不要放宽比赛裁判阈值。
+
+```bash
+python -m holoboxing.training.train_rl \
+  --assets "$HOLOBOXING_ASSETS" --lower "$HOLOBOXING_LOWER" \
+  --amp-motions "$HOLOBOXING_DATA" --policy-checkpoint "$START_POLICY" \
+  --training-mode standing --official-rules --distance-curriculum \
+  --num-envs 8 --updates 1024 --device cuda:0 --seed 43 \
+  --save-interval 128 --output "$RUN_ROOT/distance-curriculum"
+```
+
+查看 `curriculum/stage`（0～3）、`curriculum/completed_bouts`、`ego/movement/approach_distance_m`、`ego/movement/approach_forward_speed_mps` 以及正式命中指标。完成课程后，用 `--policy-checkpoint` 开新自博弈阶段，去掉 `--distance-curriculum`，保留 `--rapid-approach`。评测入口默认不启用课程，始终检查原始距离，不因近距离训练命中就宣称比赛达标。
+
+此功能不会自动启动新的长训练。已有权重需要用新配置训练后再录制和评测。
+
 本版本针对已出现的“程序完成训练、策略仍没有有效得分”修复已确认的代码问题。模型权重不会因为代码更新自动改善；旧检查点必须重新评测，并按新奖励训练。正式命中阈值、冷却、KO 和比赛时间没有修改。
 
 ## 修复内容

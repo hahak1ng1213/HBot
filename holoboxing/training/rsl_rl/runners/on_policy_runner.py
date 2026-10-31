@@ -484,6 +484,15 @@ class OnPolicyRunner:
                         if name.startswith("official_")
                     }
                 )
+                values.update(
+                    {
+                        f"movement/{name}": mean_valid(value.float())
+                        for name, value in self.env.metrics.get(
+                            agent, {}
+                        ).items()
+                        if name.startswith("approach_")
+                    }
+                )
                 for name, value in values.items():
                     key = f"{role}/{name}"
                     sums[key] = sums.get(key, 0.0) + value.item()
@@ -551,6 +560,12 @@ class OnPolicyRunner:
                 )
                 raise
             self.iteration += 1
+            curriculum = getattr(self.env, "distance_curriculum", None)
+            if curriculum is not None:
+                metrics["curriculum/stage"] = curriculum.stage
+                metrics["curriculum/completed_bouts"] = len(
+                    curriculum.outcomes
+                )
             self.invalid_transitions += int(metrics["local_recovery_count"])
             self.transitions_per_role += (
                 self.config.num_envs * self.config.num_steps_per_env
@@ -621,6 +636,9 @@ class OnPolicyRunner:
             "elapsed_seconds": self.elapsed_seconds,
             **checkpoint_resume.learning_state(self),
         }
+        curriculum = getattr(self.env, "distance_curriculum", None)
+        if curriculum is not None:
+            result["distance_curriculum"] = curriculum.state_dict()
         if self.opponent_pool is not None:
             result["opponent_pool"] = self.opponent_pool.state_dict()
         if hasattr(self.policy, "policy_spec"):

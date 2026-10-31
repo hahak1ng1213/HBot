@@ -221,14 +221,24 @@ def test_stage_checkpoint_restores_learner_counts_pool_and_rejects_mode_change(
 ):
     torch.set_num_threads(1)
     runner = make_runner(tmp_path / "first", mode, monkeypatch)
+    from holoboxing.training.distance_curriculum import DistanceCurriculum
+
+    runner.env.distance_curriculum = DistanceCurriculum(2, "cpu")
+    runner.env.distance_curriculum.stage = 2
+    runner.env.distance_curriculum.outcomes.append((True, False))
     runner.learn(2)
     path = tmp_path / "first/model_2.pt"
     state = torch.load(path, weights_only=False)
     assert state["optimizer_steps"] == {"ego": 2, "opponent": 0}
     assert state["amp_replay"]["size"] == 8
     fresh = make_runner(tmp_path / "resume", mode, monkeypatch)
+    fresh.env.distance_curriculum = DistanceCurriculum(2, "cpu")
     fresh.supervised_initialization = None
     fresh.resume(path)
+    assert (
+        fresh.env.distance_curriculum.state_dict()
+        == runner.env.distance_curriculum.state_dict()
+    )
     assert fresh.iteration == 2
     if mode == "selfplay":
         assert fresh.opponent_pool.selected == runner.opponent_pool.selected

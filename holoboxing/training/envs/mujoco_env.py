@@ -156,10 +156,24 @@ class MujocoSandbagEnv:
         *,
         standing_reference=None,
         official_rules=False,
+        distance_curriculum=False,
+        rapid_approach=False,
     ):
         self.device, self.num_envs = torch.device(device), worlds
         self.standing_reference = standing_reference
         self.official_rules = official_rules
+        self.rapid_approach = rapid_approach
+        self.distance_curriculum = None
+        if distance_curriculum:
+            if not official_rules:
+                raise ValueError(
+                    "Distance curriculum needs official scored-hit evidence"
+                )
+            from holoboxing.training.distance_curriculum import (
+                DistanceCurriculum,
+            )
+
+            self.distance_curriculum = DistanceCurriculum(worlds, device)
         if official_rules:
             from .official_referee import OfficialReferees
 
@@ -515,6 +529,8 @@ class MujocoSandbagEnv:
             self.action_managers[agent].prev_action[ids] = 0
             self.controllers[agent].reset(ids)
             self.continuous_time_buffers[agent][ids] = 0
+        if self.distance_curriculum is not None:
+            self.distance_curriculum.reset(ids, qpos, self.physics.root_qi)
         reset_punch_state(self, ids)
         self.episode_length_buf[ids] = 0
         self.fall_started[ids] = -1
@@ -628,7 +644,9 @@ class MujocoSandbagEnv:
             self.reward_terms[agent] = {
                 name: weight * fn(self, **params) * 0.02
                 for name, weight, fn, params in terms(
-                    agent, official_rules=self.official_rules
+                    agent,
+                    official_rules=self.official_rules,
+                    rapid_approach=self.rapid_approach,
                 )
             }
             if self.official_rules:
@@ -655,6 +673,17 @@ class MujocoSandbagEnv:
             )
             infos[f"terminal_critic_{role}"] = self._critic(agent)
             self.metrics[agent] = {"fallen": low[:, AGENTS.index(agent)]}
+            if self.rapid_approach:
+                from .mujoco_rewards import entity
+                from holoboxing.training.tasks.combat.mdp.rewards import (
+                    approach_state,
+                )
+
+                distance, speed = approach_state(self, entity(agent))
+                self.metrics[agent].update(
+                    approach_distance_m=distance,
+                    approach_forward_speed_mps=speed,
+                )
             if self.official_rules:
                 fighter = AGENTS.index(agent)
                 self.metrics[agent].update(
@@ -716,6 +745,13 @@ class MujocoSandbagEnv:
             }
         )
         done = done | invalid
+        if self.distance_curriculum is not None:
+            self.distance_curriculum.observe(
+                self.metrics[AGENTS[0]]["official_hits"],
+                low[:, 0],
+                done,
+                invalid,
+            )
         ids = done.nonzero().flatten()
         if len(ids):
             self._reset(ids)

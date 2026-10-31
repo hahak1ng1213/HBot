@@ -60,3 +60,17 @@ def test_selected_attack_reward_prefers_directed_punch_not_body_rush():
     torch.testing.assert_close(reward[0], reward[3])
     # No contact/collision evidence was needed for this *auxiliary* feedback.
     assert torch.isfinite(reward).all()
+
+    # Faster directed punches still improve the new profile above the old
+    # sigmoid's saturation speed. Whole-body rushing does not qualify.
+    _, weight, fn, params = next(
+        term
+        for term in terms("robot_A", official_rules=True, rapid_approach=True)
+        if term[0] == "active_hit_shaping_reward"
+    )
+    velocity[0, 1:, 0] = 1.2
+    velocity[1, 1:, 0] = 2.0
+    velocity[2, 1:, 0] = -2.0
+    reward = fn(env, **params)
+    assert reward[1] > reward[0] > reward[2]
+    assert reward[2] == 0 and reward[3] == 0

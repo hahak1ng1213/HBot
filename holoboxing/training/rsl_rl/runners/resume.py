@@ -338,6 +338,9 @@ def resume(runner, path, checkpoint_format, allow_code_change=False):
         state["identity"], runner.identity, allow_code_change
     )
     validate_learning_state(runner, state)
+    curriculum = getattr(runner.env, "distance_curriculum", None)
+    if curriculum is not None:
+        curriculum.load_state_dict(state["distance_curriculum"])
     runner.policy.load_state_dict(state["policy"], strict=True)
     runner.normalizers.load_state_dict(state["normalizers"], strict=True)
     runner.amp.discriminator.load_state_dict(
