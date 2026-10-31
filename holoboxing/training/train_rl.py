@@ -97,7 +97,7 @@ def main(argv=None):
     parser.add_argument(
         "--device",
         default="cuda:0",
-        help="PyTorch device after CUDA_VISIBLE_DEVICES remapping",
+        help="Neural-network device (cpu or cuda:N); physics always uses native MuJoCo CPU",
     )
     parser.add_argument("--num-envs", type=int)
     parser.add_argument(
@@ -107,6 +107,8 @@ def main(argv=None):
         help="Save candidate checkpoints every N PPO updates",
     )
     args = parser.parse_args(argv)
+    if args.num_envs is None and args.config is None and args.resume is None:
+        args.num_envs = 8
     if not (
         args.supervised_checkpoint
         or args.resume

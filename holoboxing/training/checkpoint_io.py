@@ -15,6 +15,9 @@ def _publish(path, write):
         stream.flush()
         os.fsync(stream.fileno())
     temporary.replace(path)
+    # Windows has no directory fsync; the file itself was flushed above.
+    if not hasattr(os, "O_DIRECTORY"):
+        return path
     # Persist the rename as well as the file contents.
     descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:

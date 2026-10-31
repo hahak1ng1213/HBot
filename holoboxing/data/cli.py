@@ -45,6 +45,11 @@ def main(argv=None):
     )
     prepare.add_argument("--output", type=Path, required=True)
     prepare.add_argument("--workers", type=int, default=2)
+    prepare.add_argument(
+        "--device",
+        default="auto",
+        help="Lower inference device; physics always uses CPU",
+    )
     prepare.add_argument("--seed", type=int, default=42)
     prepare.add_argument("--validation-fraction", type=float, default=0.1)
     prepare.add_argument("--test-fraction", type=float, default=0.0)

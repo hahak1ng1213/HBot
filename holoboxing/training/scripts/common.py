@@ -42,7 +42,9 @@ def prepare(args):
     }
     try:
         revision = subprocess.check_output(
-            ["git", "-C", str(package), "rev-parse", "HEAD"], text=True
+            ["git", "-C", str(package), "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
         ).strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         revision = None

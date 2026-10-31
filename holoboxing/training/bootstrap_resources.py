@@ -2,20 +2,24 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from holoboxing.evaluation.models import _download_file
 from holoboxing.evaluation.resources import ResourceTree
 
 REVISION = "795e5e1c1d3b6b15cc1cea9e7752742715724826"
-BASE = f"https://huggingface.co/datasets/HorizonRobotics/HoloMotion_assets/resolve/{REVISION}/holoboxing/"
+ENDPOINT = os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/")
+BASE = f"{ENDPOINT}/datasets/HorizonRobotics/HoloMotion_assets/resolve/{REVISION}/holoboxing/"
 
 
 def bootstrap(directory):
     root = Path(directory).resolve()
     root.mkdir(parents=True, exist_ok=True)
-    raw = urlopen(BASE + "resources.json", timeout=60).read()
+    headers = {"User-Agent": "HoloBoxing/1.0"}
+    with urlopen(Request(BASE + "resources.json", headers=headers), timeout=60) as response:
+        raw = response.read()
     inventory = json.loads(raw)
     for entry in inventory["files"]:
         name = Path(entry["path"])
@@ -38,7 +42,8 @@ def bootstrap(directory):
         raise ValueError("Existing manifest differs")
     manifest.write_bytes(raw)
     replay = root / "manifest.json"
-    replay_raw = urlopen(BASE + "manifest.json", timeout=60).read()
+    with urlopen(Request(BASE + "manifest.json", headers=headers), timeout=60) as response:
+        replay_raw = response.read()
     if replay.exists() and replay.read_bytes() != replay_raw:
         raise ValueError("Existing replay manifest differs")
     replay.write_bytes(replay_raw)

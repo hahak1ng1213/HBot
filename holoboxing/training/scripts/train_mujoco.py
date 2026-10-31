@@ -21,6 +21,7 @@ def train(args, config, *, time_budget=None):
     seed_everything(config.seed)
     identity = prepare(args)
     identity["official_rules"] = args.official_rules
+    identity["physics_backend"] = "mujoco_cpu"
     assets = CompetitionAssets.load(args.assets)
     _, paths, _ = resolve_resources(args.assets, args.lower)
     reference = load_neutral_reference(
@@ -114,7 +115,7 @@ def train(args, config, *, time_budget=None):
         write_json(
             args.output / "environment.json",
             {
-                "physics": "mujoco-warp",
+                "physics": "mujoco_cpu",
                 "dt": 0.005,
                 "control_dt": 0.02,
                 "ordered_evaluation_physics": env.physics.ordered,

@@ -1,11 +1,11 @@
 """Bounded fixed-controller smoke test; never reports a learned boxing baseline."""
 
 import argparse
-from importlib.metadata import version
 import json
-from pathlib import Path
 import time
 import traceback
+from importlib.metadata import version
+from pathlib import Path
 
 
 def probe(args):
@@ -23,11 +23,12 @@ def probe(args):
     env = None
     try:
         import torch
+
         from holoboxing.data.contract import CompetitionAssets
         from holoboxing.training.envs.mujoco_env import MujocoSandbagEnv
         from holoboxing.training.resources import (
-            resolve_resources,
             load_neutral_reference,
+            resolve_resources,
         )
         from holoboxing.training.rsl_rl.runners.on_policy_runner import (
             seed_everything,
@@ -43,14 +44,20 @@ def probe(args):
             for name in (
                 "torch",
                 "mujoco",
-                "mujoco-warp",
-                "warp-lang",
-                "onnxruntime-gpu",
+                "onnx",
             )
         }
-        report["gpu"] = torch.cuda.get_device_name(args.device)
-        report["capability"] = torch.cuda.get_device_capability(args.device)
-        report["torch_architectures"] = torch.cuda.get_arch_list()
+        import onnxruntime
+
+        report["versions"]["onnxruntime"] = onnxruntime.__version__
+        report["physics_backend"] = "mujoco_cpu"
+        report["policy_device"] = str(args.device)
+        if torch.device(args.device).type == "cuda":
+            report["gpu"] = torch.cuda.get_device_name(args.device)
+            report["capability"] = torch.cuda.get_device_capability(
+                args.device
+            )
+            report["torch_architectures"] = torch.cuda.get_arch_list()
         # Exercise an actual CUDA kernel, rather than accepting is_available().
         assert torch.ones(8, device=args.device).sum().item() == 8
         assets = CompetitionAssets.load(args.assets)

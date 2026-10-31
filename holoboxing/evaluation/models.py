@@ -58,7 +58,7 @@ def _download_file(path, url, expected, *, retries):
                 flush=True,
             )
             offset = 0
-        headers = {"Accept-Encoding": "identity"}
+        headers = {"Accept-Encoding": "identity", "User-Agent": "HoloBoxing/1.0"}
         if offset:
             headers["Range"] = f"bytes={offset}-"
         print(
@@ -184,8 +184,9 @@ def download_bundle(directory, *, retries=2):
         ):
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
+        endpoint = os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/")
         url = (
-            f"https://huggingface.co/{manifest['repository']}/resolve/"
+            f"{endpoint}/{manifest['repository']}/resolve/"
             f"{manifest['revision']}/{manifest['subdirectory']}/{name}?download=true"
         )
         _download_file(path, url, expected, retries=retries)

@@ -32,6 +32,10 @@ class SphericalActor(nn.Module):
         # Zero initialization exactly preserves legacy outputs until context learns.
         self.context_policy = nn.Linear(2, 32, bias=False)
         nn.init.zeros_(self.context_policy.weight)
+        # Allocate before CUDA graph capture; keep existing checkpoints compatible.
+        self.register_buffer(
+            "context_scale", torch.tensor([60.0, 1000.0]), persistent=False
+        )
         if self.spec.get("self_observation_mode", "history10") not in (
             "history10",
             "current_state",
@@ -74,9 +78,7 @@ class SphericalActor(nn.Module):
                 -1,
             )
         value = self.latent_policy(causal)
-        context = observations[..., -2:] / observations.new_tensor(
-            [60.0, 1000.0]
-        )
+        context = observations[..., -2:] / self.context_scale
         if not self.spec.get("match_context", False):
             context = torch.zeros_like(context)
         # Keep a zero gradient for disabled context so Adam checkpoints have

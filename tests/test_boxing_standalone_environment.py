@@ -124,7 +124,7 @@ class BoxingStandaloneEnvironmentTest(unittest.TestCase):
             class RejectOptionalStack(importlib.abc.MetaPathFinder):
                 def find_spec(self, fullname, path=None, target=None):
                     if fullname.split(".")[0] in {
-                        "isaacsim", "isaaclab", "omni", "newton", "smplx",
+                        "isaacsim", "isaaclab", "omni", "newton", "smplx", "warp", "mujoco_warp",
                         "pytorch_kinematics", "matplotlib", "trimesh",
                     }:
                         raise ImportError("Unnecessary boxing dependency: " + fullname)

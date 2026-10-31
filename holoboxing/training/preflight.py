@@ -9,12 +9,14 @@ import subprocess
 import sys
 
 
-def inspect(assets, lower):
+def inspect(assets, lower, device="cuda:0"):
     from holoboxing.evaluation.resources import ResourceTree
     from holoboxing.evaluation.models import verify_bundle, frozen_manifest
 
     report = dict(
         python=sys.executable,
+        physics_backend="mujoco_cpu",
+        policy_device=device,
         resources={},
         dependencies={},
         training_run=False,
@@ -37,8 +39,6 @@ def inspect(assets, lower):
         "onnx",
         "onnxruntime",
         "mujoco",
-        "mujoco_warp",
-        "warp",
     ):
         report["dependencies"][name] = (
             importlib.util.find_spec(name) is not None
@@ -57,7 +57,10 @@ def inspect(assets, lower):
     report["ready_for_runtime_probe"] = (
         all(x["status"] == "PASS" for x in report["resources"].values())
         and all(report["dependencies"].values())
-        and report.get("gpu_probe", {}).get("exit_code") == 0
+        and (
+            device == "cpu"
+            or report.get("gpu_probe", {}).get("exit_code") == 0
+        )
     )
     return report
 
@@ -67,8 +70,9 @@ def main():
     p.add_argument("--assets", required=True)
     p.add_argument("--lower", required=True)
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--device", default="cuda:0")
     args = p.parse_args()
-    report = inspect(args.assets, args.lower)
+    report = inspect(args.assets, args.lower, args.device)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as f:
         json.dump(report, f, indent=2)

@@ -1,4 +1,4 @@
-"""Torch bindings accept device descriptors from either observation backend."""
+"""Training ONNX bindings fence Torch buffers without importing Warp."""
 
 from types import SimpleNamespace
 
@@ -38,7 +38,10 @@ def test_bound_session_normalizes_device_before_allocating_and_synchronizing(
         lambda shape, **kw: allocate(original_empty, shape, **kw),
     )
     binding = SimpleNamespace(
-        bind_input=lambda *a: None, bind_output=lambda *a: None
+        bind_input=lambda *a: None,
+        bind_output=lambda *a: None,
+        synchronize_inputs=lambda: None,
+        synchronize_outputs=lambda: None,
     )
     session = SimpleNamespace(
         get_providers=lambda: ["CUDAExecutionProvider"],
@@ -56,8 +59,10 @@ def test_bound_session_normalizes_device_before_allocating_and_synchronizing(
     synchronized, verified = [], []
     monkeypatch.setattr(torch.cuda, "synchronize", synchronized.append)
     monkeypatch.setattr(onnx_device, "verify_cuda_execution", verified.append)
-    bound = TrainingBoundSession(session, "cuda:3")
+    bound = TrainingBoundSession(session, descriptor)
     assert allocated == [torch.device("cuda:3"), torch.device("cuda:3")]
     assert bound.run() is bound.outputs
     assert synchronized == [torch.device("cuda:3")]
-    assert verified == [session]
+    assert (
+        verified == []
+    )  # Official evaluator profiling is not a training dependency.

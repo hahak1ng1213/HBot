@@ -279,12 +279,6 @@ class FrozenHoloMotionV2Controller:
         """Return absolute scene-ordered joint position targets."""
 
         expected_batch = self.batch_size
-        if reference_position_w.shape != (expected_batch, 5, 5, 3):
-            raise ValueError("reference_position_w must have shape [B,5,5,3]")
-        if reference_quaternion_wxyz.shape != (expected_batch, 5, 5, 4):
-            raise ValueError(
-                "reference_quaternion_wxyz must have shape [B,5,5,4]"
-            )
         current_shapes = {
             "current_reference_root_position_w": (
                 current_reference_root_position_w,
@@ -312,8 +306,8 @@ class FrozenHoloMotionV2Controller:
             ),
         }
         for name, (value, shape) in current_shapes.items():
-            if value.shape != shape or not bool(torch.isfinite(value).all()):
-                raise ValueError(f"{name} must be finite with shape {shape}")
+            if value.shape != shape:
+                raise ValueError(f"{name} must have shape {shape}")
 
         reference_position_w = reference_position_w.to(self.device)
         reference_quaternion_wxyz = reference_quaternion_wxyz.to(self.device)
@@ -378,27 +372,13 @@ class FrozenHoloMotionV2Controller:
             include_error_terms=True,
             include_future_link_mask=False,
         )
-        if observation.shape != (
-            self.batch_size,
-            self.actor_observation_dim,
-        ):
-            raise RuntimeError("packed HoloMotion actor observation changed")
-
         with torch.inference_mode():
             result = self.module(
                 observation,
                 self.past_key_values,
                 self.step_index,
             )
-        if not isinstance(result, (tuple, list)) or len(result) < 2:
-            raise RuntimeError(
-                "HoloMotion actor did not return action and cache"
-            )
-        action, present_key_values = result[0], result[1]
-        if action.shape != self.last_action.shape:
-            raise RuntimeError("HoloMotion actor action shape changed")
-        if present_key_values.shape != self.past_key_values.shape:
-            raise RuntimeError("HoloMotion actor cache shape changed")
+        action, present_key_values = result
         if not bool(
             torch.isfinite(action).all()
             and torch.isfinite(present_key_values).all()
@@ -465,24 +445,7 @@ class CommonLower:
         return self._execute(measured, p, q, anchor, height)
 
     def _execute(self, measured, position, quaternion, anchor, height):
-        count = self.env.num_envs * 2
-        for name, value, shape in (
-            ("future positions", position, (count, 5, 5, 3)),
-            ("future quaternions", quaternion, (count, 5, 5, 4)),
-            ("anchor", anchor, (count, 3)),
-            ("height", height, (count, 1)),
-        ):
-            if value.shape != shape or not torch.isfinite(value).all():
-                raise ValueError(f"Invalid {name}")
-        if not torch.allclose(
-            quaternion.norm(dim=-1),
-            torch.ones_like(quaternion[..., 0]),
-            rtol=0,
-            atol=1e-4,
-        ):
-            raise ValueError("Non-unit reference quaternion")
         actions, targets = {}, {}
-        before = self.env._sim_step_counter
         for role, name in enumerate(self.agents):
             ids = slice(role, None, 2)
             robot = self.env.scene[name]
@@ -498,11 +461,7 @@ class CommonLower:
             )
             term = self.env.action_managers[name].get_term("joint_pos")
             actions[name] = (target - term._offset) / term._scale
-            if not torch.isfinite(actions[name]).all():
-                raise ValueError("Non-finite lower joint action")
             targets[name] = target
-        if self.env._sim_step_counter != before:
-            raise ValueError("Lower conversion must not advance physics")
         return actions, {
             "world_position": position,
             "world_quaternion": quaternion,

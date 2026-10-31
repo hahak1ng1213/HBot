@@ -1,5 +1,7 @@
 # H-bot Competition 赛道2 参赛入门教程
 
+> 本分支已改为原生 MuJoCo CPU 物理，神经网络仍可用 GPU。安装与验证步骤以 [CPU 后端说明](../docs/boxing_competition_workflow.zh-CN.md#cpu-physics-20261030) 为准。原教程中的 Warp 训练配置和耗时不适用于此分支；正式 Docker 评测仍使用原环境。
+
 [English](README.md) | 简体中文
 
 <p align="center">

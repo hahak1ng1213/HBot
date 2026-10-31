@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import torch
-import warp as wp
 
 from holoboxing.data.robot import robot_file
 from holoboxing.evaluation.runtime.fall_rules import (
@@ -281,7 +280,7 @@ class MujocoSandbagEnv:
             data = self.scene[agent].data
             p, q = state["position"][:, role], state["quaternion"][:, role]
             v, omega = state["velocity"][:, role], state["angular"][:, role]
-            ipos = wp.to_torch(self.physics.model.body_ipos)
+            ipos = self.physics.model.body_ipos
             if ipos.ndim == 2:
                 ipos = ipos[None]
             local_com = ipos[:, self.physics.body_ids[role]]
@@ -476,7 +475,7 @@ class MujocoSandbagEnv:
             self.referees.reset(ids.detach().cpu().tolist())
         if self.standing_reference is not None:
             self.standing_reference.reset(ids)
-        qpos = wp.to_torch(self.physics.data.qpos)
+        qpos = self.physics.data.qpos
         extent = torch.tensor(
             [0.05, 0.05, 0.01, 0.1, 0.1, 0.2], device=self.device
         )
@@ -503,7 +502,7 @@ class MujocoSandbagEnv:
                 -1,
             )
             qpos[ids, qi + 3 : qi + 7] = quat_multiply_wxyz(
-                delta, qpos[ids, qi + 3 : qi + 7]
+                delta.to(qpos.dtype), qpos[ids, qi + 3 : qi + 7]
             )
             joints = qpos[ids[:, None], self.physics.qi[role]] + self.uniform(
                 (len(ids), 29), -0.1, 0.1
@@ -546,7 +545,7 @@ class MujocoSandbagEnv:
         body_ids = self.physics.body_ids[
             :, [BODY_NAMES.index(name) for name in FALL_BODY_NAMES]
         ]
-        heights = wp.to_torch(self.physics.data.xpos)[:, body_ids, 2]
+        heights = self.physics.data.xpos[:, body_ids, 2]
         low = (
             heights.double() < self.physics.floor_height + FALL_HEIGHT_M
         ).any(-1)
@@ -568,16 +567,12 @@ class MujocoSandbagEnv:
     def _nonfinite_worlds(self, values):
         invalid = nonfinite_rows(values, self.num_envs, self.device)
         if bool(invalid.any()):
-            try:
-                require_finite(values, "local environment transition")
-            except FloatingPointError as error:
-                logger.warning(
-                    "Resetting %d nonfinite worlds at step %d; first ids=%s; %s",
-                    int(invalid.sum()),
-                    self.common_step_counter,
-                    invalid.nonzero().flatten()[:16].tolist(),
-                    error,
-                )
+            logger.warning(
+                "Resetting %d nonfinite worlds at step %d; first ids=%s",
+                int(invalid.sum()),
+                self.common_step_counter,
+                invalid.nonzero().flatten()[:16].tolist(),
+            )
         return invalid
 
     def step(self, actions):
@@ -586,7 +581,9 @@ class MujocoSandbagEnv:
         joint_actions, outputs = self.lower.autonomous(
             self.measured, physical, reference_override=self.standing_reference
         )
-        require_finite((joint_actions, outputs), "lower controller output")
+        require_finite(
+            (joint_actions, outputs["joint_target"]), "lower controller output"
+        )
         for role, agent in enumerate(AGENTS):
             manager = self.action_managers[agent]
             manager.prev_action.copy_(manager.action)
@@ -693,7 +690,7 @@ class MujocoSandbagEnv:
         invalid = self._nonfinite_worlds(
             {
                 "physics": {
-                    name: wp.to_torch(getattr(self.physics.data, name))
+                    name: getattr(self.physics.data, name)
                     for name in (
                         "qpos",
                         "qvel",
@@ -743,8 +740,14 @@ class MujocoSandbagEnv:
             invalid |= bad_observation
             done |= bad_observation
             observations = self._read(bad_observation, previous=observations)
-        # A failed reset is not recoverable; never pass bad data to normalizers.
-        require_finite(observations, "post-reset environment observation")
+            # Only the reset rows need a second check; healthy rows were checked above.
+            require_finite(
+                {
+                    a: {k: v[bad_observation] for k, v in values.items()}
+                    for a, values in observations.items()
+                },
+                "post-reset environment observation",
+            )
         if bool(invalid.any()):
             clear_invalid_rows(
                 (rewards, infos, self.reward_terms, self.metrics), invalid
@@ -753,52 +756,11 @@ class MujocoSandbagEnv:
         return observations, rewards, done, infos
 
     def close(self):
-        wp.synchronize_device(str(self.device))
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
 
     def diagnostic_state(self):
-        """Failure-only evidence; post-step/reset state is not a replay checkpoint."""
-        physics = self.physics
-        data = physics.data
-        ncon = min(int(wp.to_torch(data.nacon)[0]), data.naconmax)
-        nefc = wp.to_torch(data.nefc)
-        width = min(int(nefc.max()), data.njmax)
         return {
             "phase": "exception_time_may_follow_episode_reset",
-            "physics_steps": physics.steps,
-            "state": {
-                name: wp.to_torch(getattr(data, name)).detach().cpu().clone()
-                for name in (
-                    "qpos",
-                    "qvel",
-                    "qacc",
-                    "qacc_warmstart",
-                    "ctrl",
-                    "time",
-                )
-            },
-            "contacts": {
-                name: wp.to_torch(getattr(data.contact, name))[:ncon]
-                .detach()
-                .cpu()
-                .clone()
-                for name in (
-                    "worldid",
-                    "geom",
-                    "dim",
-                    "dist",
-                    "frame",
-                    "pos",
-                    "efc_address",
-                    "friction",
-                )
-            },
-            "constraint_count": nefc.cpu().clone(),
-            "constraint_force": wp.to_torch(data.efc.force)[:, :width]
-            .cpu()
-            .clone(),
-            "body_ipos": wp.to_torch(physics.model.body_ipos).cpu().clone(),
-            "targets": physics.targets.cpu().clone(),
-            "joint_acceleration": physics.joint_acceleration.cpu().clone(),
-            "net_history": physics.net_history.cpu().clone(),
-            "paired_history": physics.paired_history.cpu().clone(),
+            **self.physics.diagnostic_state(),
         }

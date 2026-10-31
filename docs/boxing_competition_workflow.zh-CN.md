@@ -1,6 +1,124 @@
 # 拳击规则对齐与独立评测工作流
 
+## 2026-10-31：node04 真实采集与首次 PPO 更新修复
+
+CPU 数据采集器现在将场景顺序的关节位置、速度按名称转换为 ONNX/训练物理的
+规范顺序，控制器输出直接按该规范顺序写入物理目标。控制器关节一致性检查保留。
+真实 RoboStriker 采集完成 6 个非测试动作文件、4858 条样本，并通过内置数据校验。
+
+球面策略的赛况归一化常量改为预先注册的非持久 buffer，避免在 CUDA 图捕获中
+从 Python 列表创建 GPU 张量；既有检查点键和冻结先验不变。源码 ZIP 没有 Git
+元数据时仍记录 revision=null，但不再把预期的 Git 查询失败打印为 fatal。
+node04 的 PyTorch 2.6.0 环境中，CUDA 捕获/重放/梯度一致性及球面 PPO、模仿导出
+相关测试共 12 项通过。
+
+修复后已完成 8 个环境、32 次 standing PPO 更新（GPU 0，原生 CPU MuJoCo），
+训练循环约 83.46 秒、含初始化与保存总计约 127.94 秒。结果保存在
+`/home/zhanghan/runs/hbot/robot-standing-v2`，末次检查点 `model_32.pt`；
+日志为同级 `robot-standing-v2.log`。这证明采样、CUDA 图、优化和保存链路完成，
+不代表已验证站立稳定性、比赛得分或胜率。原 `robot-standing` 是失败诊断目录。
+
 本次增加的是可测试的研究入口。CPU 裁判和评测编排测试不构成 GPU 物理验证或胜率证据；资源、训练依赖、上层检查点全部就绪后才能产生基线和消融结果。低层控制器及正式评测代码的计分规则保持不变。
+
+## 训练热路径校验精简
+
+CPU 后端之后的本次精简只涉及拳击训练控制链路，未改动正式裁判或训练算法。
+删除中间层重复的位姿形状/有限值检查、刚归一化后的四元数单位长度复查、
+初始化已确定的 ONNX 输出结构重复检查，以及控制转换前后的物理步计数断言。
+异常环境日志直接记录已检测出的世界编号，不再重复遍历张量并故意抛出/捕获异常。
+正常观测每步检查一次，仅重置后的异常行追加复查。
+
+仍保留外部输入接口、关节顺序、模型身份和数据划分检查；低层循环缓存、
+送往物理引擎的电机目标、物理求解器和训练数值异常检查也保留。
+文件路径边界、输出覆盖限制、正式计分与检查点兼容性检查没有删除。
+当前没有做吞吐基准，不能把减少检查等同于已测得的加速。
+
+精简后核心回归 **64 项通过**，包括新增的异常目标拒绝、异常观测恢复及
+重置失败中止测试。日志：`validation-cleanup-tests.log`。
+更早的扩展回归记录和真实资产/模型未验证的限制仍见下文。
+
+<a id="cpu-physics-20261030"></a>
+## 2026-10-30：原生 MuJoCo CPU 训练后端
+
+本分支的拳击 RL 和 measured rollout 数据采集已经替换为原生 MuJoCo CPU 物理。
+训练环境不再导入 `warp`、`mujoco_warp`，也不再调用其驱动检查。旧物理、环境、
+ONNX 和采集实现留档于仓库根目录 `.cpu-backend-original/*.txt`，不参与 Python 导入。
+神经网络、优化器和冻结低层 ONNX 的运行设备由 `--device` 选择，默认仍为 `cuda:0`；
+`--device cpu` 可用于纯 CPU 验证。高层 1097→225 接口、冻结低层权重、PPO/AMP、奖励和正式裁判规则保留。
+
+每个并行世界拥有独立的原生 MuJoCo 模型和状态，避免 COM 随机化互相污染。
+物理步长仍为 5 ms，控制周期仍为 20 ms；每个子步用 `mj_contactForce` 读取实际求解器接触力，
+转换到世界坐标后交给已有裁判。观测 FK 使用独立数据，不覆盖本子步的接触证据。
+当前 CPU 世界串行步进，尚未实现多线程物理加速。
+
+### 安装与启动
+
+在 Linux 仓库根目录创建 Python 3.11 独立环境。CPU 物理不需要 CUDA toolkit 或 Warp；
+若神经网络使用 GPU，仍须安装与显卡、驱动匹配的 PyTorch 和 ONNX Runtime GPU。
+1080 Ti 的候选安装配置如下（不代表在目标服务器验证通过）：
+
+```bash
+python3.11 -m venv .venv-holoboxing
+source .venv-holoboxing/bin/activate
+python -m pip install --upgrade pip
+python -m pip install torch==2.9.1 --index-url https://download.pytorch.org/whl/cu126
+python -m pip install -r holoboxing/training/requirements.txt
+python -m pip check
+```
+
+纯 CPU 环境改用 PyTorch CPU wheel 和 `holoboxing/training/requirements-cpu.txt`，
+不要在同一环境同时安装 `onnxruntime` 和 `onnxruntime-gpu`。
+
+资源准备命令仍见下文。资源齐全后，先运行：
+
+```bash
+python -m holoboxing.training.preflight \
+  --assets thirdparties/HoloMotion_assets/holoboxing --lower models/holomotion-v2 \
+  --device cuda:0 --output results/preflight-cpu-physics.json
+python -m holoboxing.training.runtime_probe \
+  --assets thirdparties/HoloMotion_assets/holoboxing --lower models/holomotion-v2 \
+  --device cuda:0 --output results/runtime-cpu-physics --num-envs 1 --steps 4
+```
+
+这里 `cuda:0` 仅指定神经网络设备，物理始终在 CPU。纯 CPU 检查将其换成 `cpu`。
+数据采集入口 `python -m holoboxing.data prepare ... --device cuda:0` 同样如此；
+省略数据采集设备时自动选择 CUDA（不可用时用 CPU）。
+
+使用下文 RoboStriker 路线准备数据、训练先验，再执行站立预热和自博弈。
+`train_rl` 未显式指定配置、环境数或恢复训练时，默认使用 8 个世界；已有显式配置仍会被尊重，
+不要直接套用 4096 环境的旧 GPU 配方。建议所有启动命令明确传入 `--num-envs 8`。
+
+### 数据、恢复和评测边界
+
+CPU 采集数据带独立 recipe `measured_pair_short_window_cpu_v2`，不能把旧 Warp 采集数据
+冒充为本后端数据；原始 RoboStriker 动作仍可复用，measured rollout 需要重新生成。
+RL 身份记录包含 `physics_backend=mujoco_cpu`，旧 Warp 训练检查点不能作为同一运行直接 `--resume`；
+可按现有 `--policy-checkpoint` 新阶段初始化规则复用兼容策略，重新评估效果。
+
+官方 Docker 评测、原生对手专项评测 `evaluate_native`、可选 SMPL/InterHuman 的 Newton 重定向
+仍保留各自原有依赖。这些是独立工具，不在 RoboStriker→CPU 数据采集→先验→RL→导出路径中。
+训练后应在官方环境评测最终 ONNX；CPU 和定制 Warp 物理不承诺轨迹、吞吐或比赛分数一致。
+
+### 本地验证范围
+
+新增 `tests/test_boxing_cpu_physics.py` 使用真实 MuJoCo CPU 步进和合成 MJCF，
+覆盖原生步进对照、力矩限幅、独立 COM 随机化、局部重置、速度/Jacobian 对照、
+接触力/裁判映射、无 Warp 导入、ONNX CPU I/O、环境控制奖励和 measured rollout 采集。
+环境与采集集成测试使用替身低层控制器，不代表真实冻结模型或完整比赛验收。
+本机测试环境是 Python 3.10 / Torch 2.7.1 CPU / MuJoCo 3.5.0 / ORT 1.22.0；
+不是上面的 Linux Python 3.11 GPU 环境。本地缺少赛事资产和冻结模型，未完成真实赛事场景训练。
+
+2026-10-30 实际结果：新增 CPU 后端 11 项测试通过；最终核心组合回归 61 项通过。
+扩展拳击回归为 105 项通过、1 项跳过、4 项失败；4 项失败均位于本次未修改的
+InterHuman 下载测试，Windows 下报 `Data path escapes its root: annots/...`。
+这些失败没有通过删除测试或放宽路径检查掩盖。
+另行尝试的旧 HoloRetarget H5 测试因其引用 Warp 运动跟踪模块而无法收集；
+本后端新增的纯 H5 写入/读取往返测试已通过。完整日志为仓库根目录
+`cpu-backend-tests.log` 和 `cpu-backend-extended-tests.log`。
+HDF5 写入模块的 SMPL/Warp 导入已改为仅在调用可选重定向函数时发生；
+独立环境测试显式禁止导入 Warp/Newton，验证拳击训练及数据写入入口。
+
+下方 2026-10-29 的验收记录是替换前历史记录，不适用于本次新后端。
 
 ## 2026-10-29 实际验收状态
 
@@ -24,6 +142,10 @@ PYTHONPATH=.:tests .conda-boxing/bin/python -m pytest -q \
 ```
 
 ## 资源准备与预检
+
+若服务器连接 Hugging Face 超时，可在下载前设置 `export HF_ENDPOINT=https://hf-mirror.com`。
+比赛资源 bootstrap 和冻结底层模型 download 均支持该变量；未设置时仍使用官方地址。
+下载保留固定 revision、大小及 SHA256 校验，客户端请求标识为 `HoloBoxing/1.0`。
 
 首次提交的最短路径是：换到兼容机器 → 收集真实低层 rollout 训练数据 → 训练动作先验 → 单种子站立预热与自博弈 → 导出高层 ONNX → 用当前赛事镜像做一次接口／时延验收并查看完整对局 → 上传 ONNX。现有 reference-only 窗口不能代替 rollout 数据；当前还没有可提交的已训练上层模型。
 

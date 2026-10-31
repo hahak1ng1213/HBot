@@ -1,0 +1,18 @@
+# Fully CPU inference/testing alternative. Do not install both ORT packages.
+# Standalone boxing data preparation, SL, RL, and ONNX export.
+# Install in a fresh Python 3.11 venv; no HoloMotion/Isaac environment is needed.
+# Install a Torch build compatible with the policy GPU (e.g. cu126 for Pascal).
+# Physics runs on native MuJoCo CPU; official Docker evaluation remains separate.
+torch==2.9.1
+numpy==2.2.6
+scipy==1.15.3
+h5py==3.14.0
+omegaconf==2.3.0
+loguru==0.7.3
+tabulate==0.9.0
+tqdm==4.67.1
+PyYAML==6.0.2
+mujoco==3.5.0
+onnx==1.18.0
+onnxruntime==1.22.0
+-r ../data/requirements.txt

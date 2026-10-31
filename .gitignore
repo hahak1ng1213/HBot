@@ -106,3 +106,18 @@ MUJOCO_LOG.TXT
 /holoboxing/data/processed/
 /.test-tools/
 /docs/project_beginner_guide.zh-CN.md
+
+# Local CPU-backend validation environments and scratch outputs.
+/.venv-cpu-test/
+/.cpu-*-tmp*/
+/.cpu-test-tmp*/
+/.cpu-backend-edit*.py
+/cpu-backend-tests.log
+/cpu-backend-extended-tests.log
+/cpu-backend-changes.patch
+
+# Validation cleanup review artifacts.
+/.validation-cleanup-original/
+/.validation-cleanup-tmp/
+/validation-cleanup-tests.log
+/github-upload.patch

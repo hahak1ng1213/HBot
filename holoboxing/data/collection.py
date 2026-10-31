@@ -8,12 +8,13 @@ import numpy as np
 import torch
 from scipy.spatial.transform import Rotation
 
-from .contract import CompetitionHistory, target_from_world
 from .common import sha256
+from .contract import CompetitionHistory, target_from_world
 
 MEASURED_SOURCE = "measured_frozen_lower_rollout_current_state"
 RECIPE = {
-    "version": "measured_pair_short_window_v1",
+    "version": "measured_pair_short_window_cpu_v2",
+    "physics_backend": "mujoco_cpu",
     "observation_source": MEASURED_SOURCE,
     "core_frames": 100,
     "warmup_frames": 10,
@@ -148,81 +149,72 @@ def lower_identity(directory):
 
 
 class MeasuredCollector:
-    """One GPU scene per worker; reuse it only through the official reset."""
+    """Native CPU arena with frozen lower inference on the selected Torch device."""
 
     def __init__(self, assets, lower, device="cuda:0"):
-        from holoboxing.evaluation.runtime.holomotion_v2_runtime import (
-            install_runtime,
-        )
-        from holoboxing.evaluation.runtime.compiled_artifacts import (
-            reference_schema,
-            available,
-        )
-        from holoboxing.evaluation.runtime.lower import LinkPolicy
-        from .records import scene_layout
+        from tempfile import TemporaryDirectory
 
-        if not str(device).startswith("cuda"):
-            raise ValueError("Measured collection requires a CUDA device")
-        torch.cuda.set_device(device)
-        if available():
-            raise ValueError(
-                "Measured preparation requires the source runtime, not compiled evaluation-only artifacts"
-            )
-        self.runtime = install_runtime(lower)
-        self.device = device
-        self.scene = self.runtime.BoxingMatchScene(
-            model_path=assets.resources.scene,
-            mesh_root=assets.resources.root / "meshes",
-            physics_device=device,
+        from holoboxing.training.envs.control import (
+            FrozenHoloMotionV2Controller,
+        )
+        from holoboxing.training.envs.mujoco_physics import CompetitionPhysics
+        from holoboxing.training.envs.onnx_lower import OnnxLower
+
+        from .records import scene_layout
+        from .robot import robot_file
+
+        self.device = torch.device(device)
+        self.physics = CompetitionPhysics(assets, 1, self.device)
+        self.scene = SimpleNamespace(
+            model=self.physics.models[0], data=self.physics.native[0]
         )
         self.names, self.roots, self.joints, self.point_ids = scene_layout(
             self.scene.model
         )
-        self.policies = tuple(
-            LinkPolicy(
-                Path(lower) / "exported/model_10500.onnx",
-                device=device,
-                articulation_joint_names=self.names,
-                retarget_dof_names=self.names,
-            )
-            for _ in range(2)
+        self.scratch = TemporaryDirectory(prefix="boxing-cpu-collector-")
+        session = OnnxLower(
+            Path(lower) / "exported/model_10500.onnx",
+            1,
+            self.device,
+            self.scratch.name,
         )
-        self.scene._kp = (
-            self.policies[0]
-            .kp[self.policies[0].model_to_articulation]
-            .astype(np.float64)
-        )
-        self.scene._kd = (
-            self.policies[0]
-            .kd[self.policies[0].model_to_articulation]
-            .astype(np.float64)
-        )
-        for policy in self.policies:
-            policy.attach_scene(self.scene)
-            policy.retarget_to_model = np.arange(29, dtype=np.int64)
-        self.schema = reference_schema()
-        # The lower CUDA graph captures these addresses, not Python arguments.
-        self.references = torch.stack(
-            [self.schema.template.to(device) for _ in range(2)]
-        )
-        body_ids = torch.as_tensor(self.point_ids, device=device)
-        for policy in self.policies:
-            policy.schema = self.schema
-            policy.upper_body = body_ids
-            policy.upper_body_host = self.point_ids
+        names = session.metadata["joint_names"].split(",")
+        order = [names.index(n) for n in self.names]
+        gains = [
+            torch.tensor([float(v) for v in session.metadata[k].split(",")])[
+                order
+            ]
+            for k in ("joint_stiffness", "joint_damping")
+        ]
+        # Physics uses canonical training joint order; collector uses scene order.
+        from holoboxing.training.tasks.combat.config.sandbag import JOINT_NAMES
+
+        self.physics_order = [self.names.index(n) for n in JOINT_NAMES]
+        self.physics.set_gains(*(g[self.physics_order] for g in gains))
+        self.policies = []
+        for side in ("red", "blue"):
+            with robot_file(assets.resources.scene, side) as xml:
+                self.policies.append(
+                    FrozenHoloMotionV2Controller(
+                        config_path=Path(lower) / "config.yaml",
+                        lower_session=session,
+                        robot_file_path=xml,
+                        batch_size=1,
+                        scene_joint_names=JOINT_NAMES,
+                        device=self.device,
+                    )
+                )
         self.cpu = mujoco.MjData(self.scene.model)
         self.torso = [
             self.scene.model.body(p + "torso_link").id for p in ("p1_", "p2_")
         ]
-        geom = self.scene.model.geom("smpl_ring_baseLink")
-        self.floor = geom.pos[2] + geom.size[2]
-        self.recipe = {
-            **RECIPE,
-            "lower_identity": lower_identity(lower),
-        }
+        self.floor = self.physics.floor_height
+        self.recipe = {**RECIPE, "lower_identity": lower_identity(lower)}
 
     def close(self):
-        self.scene.close()
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        self.scratch.cleanup()
 
     def reset(self, trajectory, frame):
         qpos = np.concatenate(
@@ -240,27 +232,16 @@ class MeasuredCollector:
         if trajectory["roles"] == 1:
             qpos = np.concatenate((qpos, trajectory["standing_qpos"][None]))
             qvel = np.concatenate((qvel, np.zeros_like(qvel)))
-        writer = self.scene.write_pair_state
-        # Preserve the runtime's pointer/graph rebinding; inject only velocity.
-        self.scene.write_pair_state = lambda values: writer(values, qvel=qvel)
-        try:
-            self.runtime._reset_scene(
-                self.scene, SimpleNamespace(qpos=qpos[None]), np.arange(29)
-            )
-        finally:
-            self.scene.write_pair_state = writer
-        for role, ((_, vi), (_, joint_vi)) in enumerate(
-            zip(self.roots, self.joints)
+        self.physics.reset(torch.tensor([0], device=self.device))
+        for role, ((qi, vi), (jqi, jvi)) in enumerate(
+            zip(self.roots, self.joints, strict=True)
         ):
-            actual = np.concatenate(
-                (
-                    self.scene.data.qvel[vi : vi + 6],
-                    self.scene.data.qvel[joint_vi],
-                )
-            )
-            np.testing.assert_allclose(
-                actual, qvel[role], atol=2e-6, rtol=2e-6
-            )
+            self.scene.data.qpos[qi : qi + 7] = qpos[role, :7]
+            self.scene.data.qpos[jqi] = qpos[role, 7:]
+            self.scene.data.qvel[vi : vi + 6] = qvel[role, :6]
+            self.scene.data.qvel[jvi] = qvel[role, 6:]
+        mujoco.mj_forward(self.scene.model, self.scene.data)
+        self.physics._pull()
         for policy in self.policies:
             policy.reset()
 
@@ -359,42 +340,56 @@ class MeasuredCollector:
                     )
                     row_window[frame] = (start, core)
                 seen.append(frame)
-                self.scene.prepare_actor_observation()
-                joint_targets = []
+                # Feed identical world targets to the same frozen controller used in RL.
+                from holoboxing.training.tasks.combat.mdp.geometry import (
+                    decode_output,
+                )
+                from holomotion.src.utils.torch_utils import quat_from_matrix
+
+                p = tensors[0][0].to(self.device)
+                q = tensors[1][0].to(self.device)
+                decoded_p, decoded_r = decode_output(
+                    p, q, target.to(self.device), action_dim=225
+                )
+                max_target_error = max(
+                    max_target_error,
+                    float(
+                        (decoded_p.cpu() - world.transpose(0, 1)).abs().max()
+                    ),
+                )
+                decoded_q = torch.nn.functional.normalize(
+                    quat_from_matrix(decoded_r), dim=-1
+                )
                 for role, policy in enumerate(self.policies):
-                    reference = pack_reference(
-                        self.schema,
-                        target[role].to(self.device),
-                        float(position[role, 0, 2]),
-                        out=self.references[role],
+                    jqi, jvi = self.joints[role]
+
+                    def tensor(value):
+                        return torch.as_tensor(
+                            np.asarray(value).copy(),
+                            device=self.device,
+                            dtype=torch.float32,
+                        )[None]
+
+                    jt = policy(
+                        reference_position_w=decoded_p[role : role + 1],
+                        reference_quaternion_wxyz=decoded_q[role : role + 1],
+                        current_reference_root_position_w=p[
+                            role : role + 1, 0
+                        ],
+                        reference_root_height=p[role : role + 1, 0, 2:3],
+                        robot_root_quaternion_wxyz=q[role : role + 1, 0],
+                        robot_root_angular_velocity_b=tensor(state[3][role]),
+                        robot_joint_position=tensor(
+                            self.scene.data.qpos[jqi][self.physics_order]
+                        ),
+                        robot_joint_velocity=tensor(
+                            self.scene.data.qvel[jvi][self.physics_order]
+                        ),
                     )
-                    if frame - start < 2:
-                        restored = self.schema.to_targets(
-                            reference.cpu().numpy(),
-                            position[role, 0],
-                            quaternion[role, 0],
-                        )
-                        max_target_error = max(
-                            max_target_error,
-                            float(
-                                np.abs(
-                                    restored.future_positions
-                                    - world[:, role].numpy()
-                                ).max()
-                            ),
-                        )
-                    _, jt, _, _ = policy.act(
-                        reference_qpos=reference, kinematics=None, fighter=role
-                    )
-                    joint_targets.append(jt)
-                self.scene.stage_pair_joint_targets(
-                    np.asarray(joint_targets)[None]
-                )
-                self.scene.step_reference_frame()
-                self.scene.drain_reference_frame_qpos()
-                self.scene.contact_samples(
-                    sim_time_s=np.asarray([(frame - start + 1) / 50])
-                )
+                    # Controller and physics both use canonical ONNX order.
+                    self.physics.targets[0, role] = jt[0]
+                for _ in range(4):
+                    self.physics.substep()
             retained = retained_frames(seen, core, stop)
             accepted.extend(retained)
             window_count += 1

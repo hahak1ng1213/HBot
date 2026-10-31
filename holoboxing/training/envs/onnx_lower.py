@@ -8,59 +8,95 @@ import torch
 from onnx import numpy_helper
 
 from holoboxing.evaluation.models import frozen_manifest
-from holoboxing.evaluation.runtime.fast_runtime import BoundSession
 from holoboxing.evaluation.runtime.model_contract import sha256
-from holoboxing.evaluation.runtime.onnx_device import create_device_session
 
 
-class TrainingBoundSession(BoundSession):
-    """Adapt the runtime's lightweight CUDA descriptor for Torch buffers.
-
-    Preserve the compiled bundle's source files and reuse its execution fence.
-    Training owns the Torch allocations even when compiled observations exist.
-    """
+class TrainingBoundSession:
+    """Torch-owned ORT buffers, independent of the Warp evaluation runtime."""
 
     def __init__(self, session, device):
-        from holoboxing.evaluation.runtime.onnx_device import (
-            require_gpu,
-            require_gpu_session,
-        )
-
-        self.device = torch.device(str(require_gpu(device)))
-        require_gpu_session(session)
+        self.device = torch.device(str(device))
         self.session = session
         self.inputs, self.outputs = {}, {}
         self.binding = session.io_binding()
-        for nodes, buffers, bind, allocate in (
-            (
-                session.get_inputs(),
-                self.inputs,
-                self.binding.bind_input,
-                torch.zeros,
-            ),
-            (
-                session.get_outputs(),
-                self.outputs,
-                self.binding.bind_output,
-                torch.empty,
-            ),
+        for nodes, buffers, bind in (
+            (session.get_inputs(), self.inputs, self.binding.bind_input),
+            (session.get_outputs(), self.outputs, self.binding.bind_output),
         ):
             for node in nodes:
-                shape = tuple(
-                    x if isinstance(x, int) else 1 for x in node.shape
-                )
+                shape = tuple(node.shape)
                 integer = "int64" in node.type
-                dtype = torch.int64 if integer else torch.float32
-                buffer = allocate(shape, device=self.device, dtype=dtype)
+                buffer = torch.zeros(
+                    shape,
+                    device=self.device,
+                    dtype=torch.int64 if integer else torch.float32,
+                )
                 buffers[node.name] = buffer
                 bind(
                     node.name,
-                    "cuda",
+                    self.device.type,
                     self.device.index or 0,
                     np.int64 if integer else np.float32,
                     shape,
                     buffer.data_ptr(),
                 )
+
+    def run(self):
+        self.binding.synchronize_inputs()
+        self.session.run_with_iobinding(self.binding)
+        self.binding.synchronize_outputs()
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        return self.outputs
+
+
+def training_session(path, device):
+    import onnxruntime as ort
+
+    from holoboxing.evaluation.runtime.ordered_topk import execution_source
+
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 1
+    options.inter_op_num_threads = 1
+    options.use_deterministic_compute = True
+    if device.type == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError("Requested CUDA policy device is unavailable")
+        if hasattr(ort, "preload_dlls"):
+            ort.preload_dlls(directory="")
+        provider = "CUDAExecutionProvider"
+        if provider not in ort.get_available_providers():
+            raise RuntimeError(
+                "Install a compatible onnxruntime-gpu for CUDA inference"
+            )
+        providers = [
+            (
+                provider,
+                {
+                    "device_id": device.index or 0,
+                    "user_compute_stream": str(
+                        torch.cuda.current_stream(device).cuda_stream
+                    ),
+                    "arena_extend_strategy": "kSameAsRequested",
+                    "use_tf32": "0",
+                },
+            )
+        ]
+        options.add_session_config_entry(
+            "session.disable_cpu_ep_fallback", "1"
+        )
+    elif device.type == "cpu":
+        provider = "CPUExecutionProvider"
+        providers = [provider]
+    else:
+        raise ValueError("Choose cpu or cuda for policy inference")
+    session = ort.InferenceSession(
+        execution_source(path), sess_options=options, providers=providers
+    )
+    session.disable_fallback()
+    if session.get_providers()[0] != provider:
+        raise RuntimeError(f"Requested {provider} was not activated")
+    return session
 
 
 def specialize_graph(path, batch_size):
@@ -128,12 +164,8 @@ class OnnxLower:
             for value in (batch_size, inference_batch_size)
         ):
             raise ValueError("Batch sizes must be positive integers")
-        self.device = torch.device(device)
-        if self.device.type != "cuda":
-            raise ValueError(
-                "The frozen ONNX controller requires a CUDA device"
-            )
-        if self.device.index is None:
+        self.device = torch.device(str(device))
+        if self.device.type == "cuda" and self.device.index is None:
             self.device = torch.device("cuda", torch.cuda.current_device())
         self.batch_size = batch_size
         # Keep static ONNX batches without restricting the environment count.
@@ -148,16 +180,7 @@ class OnnxLower:
         target.parent.mkdir(parents=True, exist_ok=True)
         onnx.save(graph, target)
         del graph
-        self.session = create_device_session(
-            target,
-            device_id=self.device.index,
-            cuda_options={
-                "arena_extend_strategy": "kSameAsRequested",
-                "user_compute_stream": str(
-                    torch.cuda.current_stream(self.device).cuda_stream
-                ),
-            },
-        )
+        self.session = training_session(target, self.device)
         expected = {
             "obs": [self.chunk_size, 1378],
             "past_key_values": [1, 2, self.chunk_size, 32, 4, 64],
@@ -185,7 +208,8 @@ class OnnxLower:
             # ORT may use its own stream (CUDA stream 0 is not an external
             # stream). Finish input writes and the previous output reads before
             # reusing bound buffers; the shared runner fences output writes.
-            torch.cuda.current_stream(self.device).synchronize()
+            if self.device.type == "cuda":
+                torch.cuda.current_stream(self.device).synchronize()
             output = self.bound.run()
             actions[rows].copy_(output["actions"])
             present[:, :, rows].copy_(output["present_key_values"])

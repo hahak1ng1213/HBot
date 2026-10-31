@@ -7,14 +7,16 @@ import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from holosmpl.converters.smpl_to_body_poses import SmplToBodyPosesConverter
 from holoretarget.config import DEFAULT_CONFIG, HoloRetargetConfig
-from holoretarget.online import HoloRetargeter
 from holoretarget.schema import DOF_POS_DIM, QPOS_DIM
+
+if TYPE_CHECKING:
+    from holosmpl.converters.smpl_to_body_poses import SmplToBodyPosesConverter
+    from holoretarget.online import HoloRetargeter
 
 
 ROBOT_H5_ARRAY_NAMES = (
@@ -168,6 +170,10 @@ def retarget_holosmpl_h5_to_robot_h5(
     progress_interval: int = 10,
 ) -> dict[str, Any]:
     """Convert HoloSMPL H5 shards into the robot training H5 v2 format."""
+
+    # Plain robot H5 writing must not import the optional Warp/Newton pipeline.
+    from holosmpl.converters.smpl_to_body_poses import SmplToBodyPosesConverter
+    from holoretarget.online import HoloRetargeter
 
     holosmpl_h5_root = Path(holosmpl_h5_root)
     output_root = Path(output_root)

@@ -494,6 +494,7 @@ def prepare_dataset(
     *,
     assets,
     workers=1,
+    device="auto",
     seed=42,
     validation_fraction=0.1,
     test_fraction=0.0,
@@ -562,6 +563,8 @@ def prepare_dataset(
             str(output / "prepared"),
             "--workers",
             str(workers),
+            "--device",
+            device,
         ]
         for record in used:
             arguments += ["--motion", str(record["file"])]

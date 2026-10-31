@@ -23,7 +23,10 @@ from .robot import load_scene_model
 
 DATA_FORMAT = "holoboxing_competition_records_v2"
 SOURCE_SCHEMA = (
-    Path(__file__).resolve().parents[1] / "training" / "assets" / "robot_schema.json"
+    Path(__file__).resolve().parents[1]
+    / "training"
+    / "assets"
+    / "robot_schema.json"
 )
 
 
@@ -107,7 +110,9 @@ def load_trajectory(path, scene_joint_names):
     joints = joints[..., order]
     query = np.arange(int(np.floor(times[-1] * 50 + 1e-8)) + 1) / 50
     if len(query) < 6:
-        raise ValueError("A source clip needs six 50 Hz frames without future padding")
+        raise ValueError(
+            "A source clip needs six 50 Hz frames without future padding"
+        )
     # The endpoint can exceed the source by roundoff, not by a real frame.
     sample_times = np.clip(query, times[0], times[-1])
 
@@ -191,9 +196,7 @@ def scene_layout(model):
         ]
         role_names = tuple(model.joint(i).name[len(prefix) :] for i in ids)
         if names is not None and names != role_names:
-            raise ValueError(
-                "Training robots have different joint layouts"
-            )
+            raise ValueError("Training robots have different joint layouts")
         names = role_names
         joints.append(
             (
@@ -216,7 +219,9 @@ def initial_qpos(assets, model):
     reset = json.loads(assets.resources.initial_state.read_text())
     reset_names = reset["dof_names"]
     if set(reset_names) != set(names):
-        raise ValueError("Public reset joint names differ from training robots")
+        raise ValueError(
+            "Public reset joint names differ from training robots"
+        )
     order = [reset_names.index(name) for name in names]
     state = np.asarray(reset["qpos"], np.float64)
     result = model.qpos0.copy()
@@ -353,7 +358,9 @@ def prepare_clip(assets, source, output, *, collector):
         # Preserve every real transition, including the last four per clip.
         amp_reference.append(torch.cat((features[:-1], features[1:]), -1))
         amp_root_quaternion.append(
-            torch.stack((root_quaternion[:-1, role], root_quaternion[1:, role]), 1)
+            torch.stack(
+                (root_quaternion[:-1, role], root_quaternion[1:, role]), 1
+            )
         )
     packet = dict(
         format=np.asarray(DATA_FORMAT),
@@ -409,6 +416,11 @@ def main(argv=None):
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="Lower inference: auto, cpu or cuda:N; physics is CPU",
+    )
     args = parser.parse_args(argv)
     for directory in args.motion_directory:
         args.motion.extend(sorted(directory.glob("*.npz")))
@@ -422,10 +434,10 @@ def main(argv=None):
         parser.error("Worker count must be positive")
     from holoboxing.evaluation.models import verify_bundle
 
-    lower = verify_bundle(os.environ.get("HOLOBOXING_LOWER", "models/holomotion-v2"))
+    lower = verify_bundle(
+        os.environ.get("HOLOBOXING_LOWER", "models/holomotion-v2")
+    )
     devices = torch.cuda.device_count()
-    if not devices:
-        raise ValueError("Data preparation requires a CUDA GPU")
     assets = CompetitionAssets.load(args.assets)
     if args.output.exists() and any(args.output.iterdir()):
         raise ValueError("Use a new empty prepared-data directory")
@@ -437,7 +449,14 @@ def main(argv=None):
     ]
     workers = min(args.workers, len(tasks))
     groups = [
-        (args.assets, lower, f"cuda:{index % devices}", tasks[index::workers])
+        (
+            args.assets,
+            lower,
+            (f"cuda:{index % devices}" if devices else "cpu")
+            if args.device == "auto"
+            else args.device,
+            tasks[index::workers],
+        )
         for index in range(workers)
     ]
     if workers == 1:
@@ -448,7 +467,8 @@ def main(argv=None):
             mp_context=multiprocessing.get_context("spawn"),
         ) as executor:
             prepared = [
-                item for group in executor.map(_prepare_group, groups)
+                item
+                for group in executor.map(_prepare_group, groups)
                 for item in group
             ]
     for index, report in sorted(prepared):

@@ -1,5 +1,7 @@
 # H-bot Competition Track 2 Tutorial: Build a Competition Boxing Policy
 
+> This branch uses native MuJoCo CPU physics with selectable CPU/CUDA neural inference. See the [CPU backend setup](../docs/boxing_competition_workflow.zh-CN.md#cpu-physics-20261030). The original Warp training setup/timings below do not apply to this branch; official Docker evaluation is unchanged.
+
 English | [简体中文](README.zh-CN.md)
 
 <p align="center">

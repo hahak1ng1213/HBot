@@ -1,21 +1,20 @@
-"""Batched competition XML physics with explicit named state and PD inputs."""
+"""Native MuJoCo CPU physics; Torch policy tensors may live on CPU or CUDA.
+
+The previous Warp implementation is archived in .cpu-backend-original/.
+Each world owns an independent MjModel/MjData, including randomized inertia.
+Torch qpos/qvel are writable staging buffers; native solver/contact data are
+kept intact while separate FK data supplies same-instant observations.
+"""
+
+import copy
+from types import SimpleNamespace
 
 import mujoco
-import mujoco_warp as mjw
 import numpy as np
 import torch
-import warp as wp
 
 from holoboxing.data.records import initial_qpos
 from holoboxing.data.robot import load_scene_model
-from holoboxing.evaluation.runtime.collision_precision import (
-    install as install_collision_precision,
-)
-from holoboxing.evaluation.runtime.deterministic_physics import (
-    OrderedArena,
-    check_supported,
-    ordered_physics,
-)
 from holoboxing.training.tasks.combat.config.sandbag import (
     BODY_NAMES,
     JOINT_NAMES,
@@ -23,99 +22,21 @@ from holoboxing.training.tasks.combat.config.sandbag import (
 from holoboxing.training.tasks.combat.mdp.geometry import matrix, rotate
 
 
-@wp.kernel
-def pd(
-    q: wp.array2d(dtype=float),
-    v: wp.array2d(dtype=float),
-    qi: wp.array2d(dtype=int),
-    vi: wp.array2d(dtype=int),
-    ai: wp.array2d(dtype=int),
-    target: wp.array3d(dtype=float),
-    kp: wp.array(dtype=float),
-    kd: wp.array(dtype=float),
-    limits: wp.array2d(dtype=float),
-    ctrl: wp.array2d(dtype=float),
-):
-    world, role, j = wp.tid()
-    effort = kp[j] * (target[world, role, j] - q[world, qi[role, j]])
-    effort -= kd[j] * v[world, vi[role, j]]
-    ctrl[world, ai[role, j]] = wp.clamp(
-        effort, -limits[role, j], limits[role, j]
-    )
-
-
-@wp.kernel
-def indexed_contact_force(
-    count: wp.array(dtype=int),
-    worlds: wp.array(dtype=int),
-    dimensions: wp.array(dtype=int),
-    addresses: wp.array2d(dtype=int),
-    friction: wp.array2d(dtype=float),
-    frames: wp.array(dtype=wp.mat33),
-    constraint_count: wp.array(dtype=int),
-    constraint_force: wp.array2d(dtype=float),
-    result: wp.array(dtype=wp.spatial_vector),
-):
-    c = wp.tid()
-    if c >= count[0]:
-        return
-    world, dimension = worlds[c], dimensions[c]
-    force = wp.spatial_vector()
-    if dimension == 1:
-        address = addresses[c, 0]
-        if address >= 0 and address < constraint_count[world]:
-            force[0] = constraint_force[world, address]
-    else:
-        # Native batched allocation can interleave edges from different contacts.
-        # Each edge has its own address; base + offset is not a valid lookup.
-        for i in range(dimension - 1):
-            first, second = addresses[c, 2 * i], addresses[c, 2 * i + 1]
-            positive, negative = float(0.0), float(0.0)
-            if first >= 0 and first < constraint_count[world]:
-                positive = constraint_force[world, first]
-            if second >= 0 and second < constraint_count[world]:
-                negative = constraint_force[world, second]
-            force[0] += positive + negative
-            force[i + 1] = (positive - negative) * friction[c, i]
-    result[c] = wp.spatial_vector(
-        wp.spatial_top(force) @ frames[c],
-        wp.spatial_bottom(force) @ frames[c],
-    )
-
-
-@wp.kernel
-def contact_forces(
-    count: wp.array(dtype=int),
-    worlds: wp.array(dtype=int),
-    pairs: wp.array(dtype=wp.vec2i),
-    distance: wp.array(dtype=float),
-    force: wp.array(dtype=wp.spatial_vector),
-    bodies: wp.array(dtype=int),
-    slots: wp.array2d(dtype=int),
-    net: wp.array3d(dtype=wp.vec3),
-    paired: wp.array3d(dtype=wp.vec3),
-):
-    c = wp.tid()
-    if c >= count[0]:
-        return
-    w, pair = worlds[c], pairs[c]
-    if w < 0 or pair[0] < 0 or pair[1] < 0:
-        return
-    f = wp.vec3(force[c][0], force[c][1], force[c][2])
-    for side in range(2):
-        body = bodies[pair[side]]
-        if body >= 0:
-            sign = float(2 * side - 1)
-            wp.atomic_add(net, w, body // 30, body % 30, sign * f)
-        slot = slots[pair[side], pair[1 - side]]
-        if slot >= 0:
-            wp.atomic_add(
-                paired, w, slot // 2, slot % 2, float(2 * side - 1) * f
-            )
-
-
 class CompetitionPhysics:
-    """No task rewards, policy updates, material changes or failure masking."""
+    backend = "mujoco_cpu"
+    fields = (
+        "qpos",
+        "qvel",
+        "qacc",
+        "qacc_warmstart",
+        "ctrl",
+        "time",
+        "xpos",
+        "xquat",
+        "xipos",
+        "cvel",
+        "subtree_com",
+    )
 
     def __init__(
         self,
@@ -124,26 +45,16 @@ class CompetitionPhysics:
         device,
         *,
         contact_capacity=None,
-        constraint_capacity=8192,
+        constraint_capacity=None,
         ordered=None,
     ):
+        if type(worlds) is not int or worlds < 1:
+            raise ValueError("Physics requires positive worlds")
         self.device = torch.device(device)
-        if self.device.type != "cuda" or worlds < 1:
-            raise ValueError(
-                "Competition physics requires CUDA and positive worlds"
-            )
         self.num_envs = worlds
-        # Batch contacts share a pool, unlike the evaluator's single-arena reserve.
-        if contact_capacity is None:
-            contact_capacity = 4096 if worlds == 1 else 256
-        wp.set_device(str(self.device))
-        wp.set_stream(
-            wp.stream_from_torch(torch.cuda.current_stream(self.device))
-        )
         self.host = load_scene_model(assets)
-        check_supported(self.host)
-        # Version-gated above; install before Warp compiles collision kernels.
-        install_collision_precision()
+        if not np.isclose(self.host.opt.timestep, 0.005):
+            raise ValueError("Competition physics requires a 0.005 s timestep")
         self.initial = mujoco.MjData(self.host)
         self.initial.qpos[:] = initial_qpos(assets, self.host)
         mujoco.mj_forward(self.host, self.initial)
@@ -151,27 +62,23 @@ class CompetitionPhysics:
         self.floor_height = float(
             self.initial.geom_xpos[floor, 2] + self.host.geom_size[floor, 2]
         )
-        self.model = mjw.put_model(self.host)
-        self.data = mjw.put_data(
-            self.host,
-            self.initial,
-            nworld=worlds,
-            nconmax=contact_capacity,
-            njmax=constraint_capacity,
-        )
-        self.fk = mjw.put_data(
-            self.host,
-            self.initial,
-            nworld=worlds,
-            nconmax=max(1, self.initial.ncon),
-            njmax=max(1, self.initial.nefc),
-        )
-        self.ordered = worlds == 1 if ordered is None else ordered
-        if self.ordered and worlds != 1:
-            raise ValueError(
-                "Evaluation's ordered physics supports one world only"
+        self.models = [copy.copy(self.host) for _ in range(worlds)]
+        self.native = [mujoco.MjData(m) for m in self.models]
+        self.fk = [mujoco.MjData(m) for m in self.models]
+        for m, d in zip(self.models, self.native, strict=True):
+            d.qpos[:] = self.initial.qpos
+            mujoco.mj_forward(m, d)
+        self.data = SimpleNamespace()
+        self.model = SimpleNamespace(
+            body_ipos=torch.tensor(
+                np.stack([m.body_ipos for m in self.models]),
+                dtype=torch.float32,
+                device=device,
             )
-        self.ordering = OrderedArena(self.model) if self.ordered else None
+        )
+        self.ordered = (
+            False  # Native solver, not the official Warp ordering patch.
+        )
         qi, vi, ai, bids, roots = [], [], [], [], []
         actuator_by_joint = {
             int(j[0]): i for i, j in enumerate(self.host.actuator_trnid)
@@ -197,6 +104,8 @@ class CompetitionPhysics:
             torch.tensor(np.asarray(x), device=device) for x in (qi, vi, ai)
         ]
         self.body_ids = torch.tensor(bids, device=device)
+        self.native_body_ids = np.asarray(bids)
+        self.native_root_ids = self.host.body_rootid[self.native_body_ids]
         self.root_qi = roots
         self.root_ids = torch.tensor(
             self.host.body_rootid[np.asarray(bids)], device=device
@@ -206,10 +115,8 @@ class CompetitionPhysics:
             np.asarray(ai)
         ].all() or not np.allclose(limits[..., 0], -limits[..., 1]):
             raise ValueError("Expected symmetric scene torque limits")
-        self.limits = wp.array(limits[..., 1].astype(np.float32))
-        self.indices = [
-            wp.array(np.asarray(x, dtype=np.int32)) for x in (qi, vi, ai)
-        ]
+        self.limits = limits[..., 1].copy()
+        self.indices = [np.asarray(x, dtype=np.int64) for x in (qi, vi, ai)]
         self.targets = (
             torch.tensor(
                 self.initial.qpos[np.asarray(qi)],
@@ -219,16 +126,12 @@ class CompetitionPhysics:
             .expand(worlds, -1, -1)
             .clone()
         )
-        self.forces = wp.zeros(self.data.naconmax, dtype=wp.spatial_vector)
-        self.contact_ids = wp.array(
-            np.arange(self.data.naconmax, dtype=np.int32)
-        )
         mapping = np.full(self.host.nbody, -1, dtype=np.int32)
         mapping[np.asarray(bids).flatten()] = np.arange(60)
         # Fixed glove/head links belong to the same rigid body as their
         # actuated parent. Retain their forces in the existing 30-body schema.
         rigid_body = self.host.body_weldid[self.host.geom_bodyid]
-        self.geom_bodies = wp.array(mapping[rigid_body])
+        self.geom_bodies = mapping[rigid_body]
         slots = np.full((self.host.ngeom, self.host.ngeom), -1, dtype=np.int32)
         for role, prefix in enumerate(("p1_", "p2_")):
             other = "p2_" if role == 0 else "p1_"
@@ -241,68 +144,52 @@ class CompetitionPhysics:
                         rigid_body == wrist,
                     )
                 ] = role * 2 + hand
-        self.slots = wp.array(slots)
-        self.net = wp.zeros((worlds, 2, 30), dtype=wp.vec3)
-        self.paired = wp.zeros((worlds, 2, 2), dtype=wp.vec3)
+        self.slots = slots
         self.net_history = torch.zeros((worlds, 6, 2, 30, 3), device=device)
         self.paired_history = torch.zeros((worlds, 6, 2, 2, 3), device=device)
-        self.steps = 0
         self.joint_acceleration = torch.zeros((worlds, 2, 29), device=device)
-        self.forward()
-        # Per-world reset copies do not recompute or disturb any other world.
-        self.reset_state = {
-            name: wp.to_torch(getattr(self.data, name))[:1].clone()
-            for name in (
-                "qpos",
-                "qvel",
-                "qacc",
-                "qacc_warmstart",
-                "ctrl",
-                "time",
-                "xpos",
-                "xquat",
-                "xipos",
-                "cvel",
-                "subtree_com",
+        self.steps = 0
+        self.kp = self.kd = None
+        self._contacts = [[] for _ in range(worlds)]
+        self._pull()
+
+    def _pull(self, ids=None):
+        ids = list(range(self.num_envs)) if ids is None else ids
+        for name in self.fields:
+            values = np.stack(
+                [np.asarray(getattr(self.native[i], name)) for i in ids]
             )
-        }
+            tensor = torch.as_tensor(values, device=self.device)
+            if not hasattr(self.data, name):
+                setattr(self.data, name, tensor.clone())
+            else:
+                getattr(self.data, name)[ids] = tensor
+
+    def _push(self):
+        # Explicit synchronization of only writable integration inputs.
+        qpos = self.data.qpos.detach().cpu().numpy()
+        qvel = self.data.qvel.detach().cpu().numpy()
+        for i, d in enumerate(self.native):
+            d.qpos[:] = qpos[i]
+            d.qvel[:] = qvel[i]
 
     def forward(self):
-        if self.ordered:
-            with ordered_physics(self.ordering):
-                mjw.forward(self.model, self.data)
-        else:
-            mjw.forward(self.model, self.data)
-        self.check_capacity()
-
-    def check_capacity(self):
-        if (
-            int(wp.to_torch(self.data.nacon)[0]) > self.data.naconmax
-            or int(wp.to_torch(self.data.ncollision)[0]) > self.data.naccdmax
-            or bool((wp.to_torch(self.data.nefc) > self.data.njmax).any())
-        ):
-            raise RuntimeError(
-                "Contact/constraint capacity exhausted; physics is invalid"
-            )
-        if self.ordering is not None and int(
-            wp.to_torch(self.ordering.overflow)[0]
-        ):
-            raise RuntimeError("Evaluation ordered contact capacity exhausted")
+        self._push()
+        for m, d in zip(self.models, self.native, strict=True):
+            mujoco.mj_forward(m, d)
+        self._pull()
 
     def set_gains(self, kp, kd):
-        self.kp, self.kd = [
-            wp.from_torch(x.to(self.device, torch.float32).contiguous())
-            for x in (kp, kd)
-        ]
+        self.kp, self.kd = [x.detach().cpu().numpy().copy() for x in (kp, kd)]
 
     def push(self, ids, role, delta_velocity_w):
         """Add a world-frame velocity impulse at the root center of mass."""
         root = self.host.body(("p1_", "p2_")[role] + "pelvis")
         qi = self.root_qi[role]
         vi = int(self.host.jnt_dofadr[root.jntadr[0]])
-        qpos, qvel = wp.to_torch(self.data.qpos), wp.to_torch(self.data.qvel)
-        rotation = matrix(qpos[ids, qi + 3 : qi + 7])
-        ipos = wp.to_torch(self.model.body_ipos)
+        qpos, qvel = self.data.qpos, self.data.qvel
+        rotation = matrix(qpos[ids, qi + 3 : qi + 7].float())
+        ipos = self.model.body_ipos
         local_com = (
             ipos[0, root.id] if ipos.shape[0] == 1 else ipos[ids, root.id]
         )
@@ -316,165 +203,193 @@ class CompetitionPhysics:
         )
 
     def randomize_torso_com(self, offsets):
-        # MuJoCo-Warp broadcasts model parameters unless explicitly expanded.
-        # Derived inertial parameters must also be per-world before set_const.
-        fields = (
-            "body_ipos",
-            "body_subtreemass",
-            "dof_invweight0",
-            "body_invweight0",
-            "tendon_length0",
-            "tendon_invweight0",
-            "cam_pos0",
-            "cam_poscom0",
-            "cam_mat0",
-            "light_pos0",
-            "light_poscom0",
-            "light_dir0",
-            "actuator_acc0",
+        offsets = offsets.detach().cpu().numpy()
+        if (
+            offsets.shape != (self.num_envs, 2, 3)
+            or not np.isfinite(offsets).all()
+        ):
+            raise ValueError("Invalid per-world torso COM offsets")
+        for i, m in enumerate(self.models):
+            for role, prefix in enumerate(("p1_", "p2_")):
+                m.body_ipos[m.body(prefix + "torso_link").id] += offsets[
+                    i, role
+                ]
+            # Use scratch data so recomputing model constants cannot reset a world.
+            mujoco.mj_setConst(m, mujoco.MjData(m))
+        self.model.body_ipos.copy_(
+            torch.as_tensor(
+                np.stack([m.body_ipos for m in self.models]),
+                device=self.device,
+            )
         )
-        for name in fields:
-            array = getattr(self.model, name)
-            value = wp.to_torch(array)
-            if value.shape[0] == 1:
-                expanded = value.expand(
-                    self.num_envs, *value.shape[1:]
-                ).clone()
-                setattr(
-                    self.model,
-                    name,
-                    wp.from_torch(expanded, dtype=array.dtype),
-                )
-        inertia = wp.to_torch(self.model.stat.meaninertia)
-        self.model.stat.meaninertia = wp.from_torch(
-            inertia.expand(self.num_envs).clone()
-        )
-        com = wp.to_torch(self.model.body_ipos)
-        for role, prefix in enumerate(("p1_", "p2_")):
-            com[:, self.host.body(prefix + "torso_link").id] += offsets[
-                :, role
-            ]
-        mjw.set_const(self.model, self.data)
         self.forward()
 
     def substep(self):
-        previous_velocity = wp.to_torch(self.data.qvel)[:, self.vi].clone()
-        wp.launch(
-            pd,
-            dim=(self.num_envs, 2, 29),
-            inputs=[
-                self.data.qpos,
-                self.data.qvel,
-                *self.indices,
-                wp.from_torch(self.targets),
-                self.kp,
-                self.kd,
-                self.limits,
-                self.data.ctrl,
-            ],
-        )
-        if self.ordered:
-            with ordered_physics(self.ordering):
-                mjw.step(self.model, self.data)
-        else:
-            mjw.step(self.model, self.data)
-        self.check_capacity()
-        # Use per-physics-step finite differences, not control-period averaging.
+        if self.kp is None:
+            raise RuntimeError("Set controller gains before stepping")
+        self._push()
+        targets = self.targets.detach().cpu().numpy()
+        qi, vi, ai = self.indices
+        previous = np.stack([d.qvel[vi].copy() for d in self.native])
+        for i, (m, d) in enumerate(zip(self.models, self.native, strict=True)):
+            effort = self.kp * (targets[i] - d.qpos[qi]) - self.kd * d.qvel[vi]
+            d.ctrl[ai] = np.clip(effort, -self.limits, self.limits)
+            warnings = d.warning.number.copy()
+            mujoco.mj_step(m, d)
+            # MuJoCo can auto-reset a divergent world. Never silently accept it.
+            if np.any(d.warning.number > warnings):
+                self._pull()
+                raise RuntimeError(
+                    f"MuJoCo solver warning in world {i}; inspect diagnostic_state"
+                )
+        self._pull()
+        velocity = np.stack([d.qvel[vi] for d in self.native])
         self.joint_acceleration.copy_(
-            (wp.to_torch(self.data.qvel)[:, self.vi] - previous_velocity)
-            / self.host.opt.timestep
+            torch.as_tensor(
+                (velocity - previous) / self.host.opt.timestep,
+                device=self.device,
+            )
         )
         self.read_contact_forces()
-        self.net.zero_()
-        self.paired.zero_()
-        wp.launch(
-            contact_forces,
-            dim=self.data.naconmax,
-            inputs=[
-                self.data.nacon,
-                self.data.contact.worldid,
-                self.data.contact.geom,
-                self.data.contact.dist,
-                self.forces,
-                self.geom_bodies,
-                self.slots,
-                self.net,
-                self.paired,
-            ],
-        )
-        self.net_history[:, 1:] = self.net_history[:, :-1].clone()
-        self.paired_history[:, 1:] = self.paired_history[:, :-1].clone()
-        self.net_history[:, 0] = wp.to_torch(self.net)
-        self.paired_history[:, 0] = wp.to_torch(self.paired)
         self.steps += 1
 
     def read_contact_forces(self):
-        # check_supported restricts this scene to pyramidal friction cones.
-        wp.launch(
-            indexed_contact_force,
-            dim=self.data.naconmax,
-            inputs=[
-                self.data.nacon,
-                self.data.contact.worldid,
-                self.data.contact.dim,
-                self.data.contact.efc_address,
-                wp.from_torch(wp.to_torch(self.data.contact.friction)),
-                self.data.contact.frame,
-                self.data.nefc,
-                self.data.efc.force,
-                self.forces,
-            ],
-        )
+        from holoboxing.training.envs.official_referee import contact_records
+
+        net = np.zeros((self.num_envs, 2, 30, 3))
+        paired = np.zeros((self.num_envs, 2, 2, 3))
+        self._contacts = []
+        for w, (m, d) in enumerate(zip(self.models, self.native, strict=True)):
+            forces = np.zeros((d.ncon, 6))
+            for c in range(d.ncon):
+                local = np.zeros(6)
+                mujoco.mj_contactForce(m, d, c, local)
+                frame = d.contact.frame[c].reshape(3, 3)
+                forces[c, :3] = local[:3] @ frame
+                forces[c, 3:] = local[3:] @ frame
+                pair = d.contact.geom[c]
+                for side in (0, 1):
+                    body = self.geom_bodies[pair[side]]
+                    force = (2 * side - 1) * forces[c, :3]
+                    if body >= 0:
+                        net[w, body // 30, body % 30] += force
+                    slot = self.slots[pair[side], pair[1 - side]]
+                    if slot >= 0:
+                        paired[w, slot // 2, slot % 2] += force
+            self._contacts.append(
+                contact_records(
+                    m,
+                    np.zeros(d.ncon, dtype=int),
+                    d.contact.geom[: d.ncon],
+                    d.contact.pos[: d.ncon],
+                    forces,
+                    d.contact.frame[: d.ncon].reshape(-1, 3, 3)[:, 0],
+                    d.contact.dist[: d.ncon],
+                    d.ncon,
+                    1,
+                )[0]
+            )
+        self.net_history[:, 1:] = self.net_history[:, :-1].clone()
+        self.paired_history[:, 1:] = self.paired_history[:, :-1].clone()
+        self.net_history[:, 0] = torch.as_tensor(net, device=self.device)
+        self.paired_history[:, 0] = torch.as_tensor(paired, device=self.device)
 
     def official_contacts(self):
-        from .official_referee import contact_records
-
-        contact = self.data.contact
-        count = int(wp.to_torch(self.data.nacon)[0])
-
-        def cpu(value):
-            return wp.to_torch(value)[:count].detach().cpu().numpy()
-
-        return contact_records(
-            self.host,
-            cpu(contact.worldid),
-            cpu(contact.geom),
-            cpu(contact.pos),
-            cpu(self.forces),
-            cpu(contact.frame)[:, 0],
-            cpu(contact.dist),
-            count,
-            self.num_envs,
-        )
+        return self._contacts
 
     def reset(self, ids):
-        mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        mask[ids] = True
-        mjw.reset_data(self.model, self.data, wp.from_torch(mask))
-        for name, value in self.reset_state.items():
-            wp.to_torch(getattr(self.data, name))[ids] = value
-        self.targets[ids] = self.reset_state["qpos"][:, self.qi]
+        rows = ids.detach().cpu().tolist()
+        if not rows:
+            return
+        for i in rows:
+            m, d = self.models[i], self.native[i]
+            mujoco.mj_resetData(m, d)
+            d.qpos[:] = self.initial.qpos
+            mujoco.mj_forward(m, d)
+            self._contacts[i] = []
+        self._pull(rows)
+        self.targets[ids] = torch.as_tensor(
+            self.initial.qpos[self.indices[0]],
+            device=self.device,
+            dtype=torch.float32,
+        )
         self.net_history[ids] = 0
         self.paired_history[ids] = 0
         self.joint_acceleration[ids] = 0
 
     def state(self):
-        wp.copy(self.fk.qpos, self.data.qpos)
-        wp.copy(self.fk.qvel, self.data.qvel)
-        mjw.kinematics(self.model, self.fk)
-        mjw.com_pos(self.model, self.fk)
-        mjw.com_vel(self.model, self.fk)
-        pos = wp.to_torch(self.fk.xpos)[:, self.body_ids]
-        quat = wp.to_torch(self.fk.xquat)[:, self.body_ids]
-        cv = wp.to_torch(self.fk.cvel)[:, self.body_ids]
-        com = wp.to_torch(self.fk.subtree_com)[:, self.root_ids]
-        vel = cv[..., 3:] + torch.cross(cv[..., :3], pos - com, dim=-1)
+        self._push()
+        for m, source, d in zip(
+            self.models, self.native, self.fk, strict=True
+        ):
+            d.qpos[:] = source.qpos
+            d.qvel[:] = source.qvel
+            mujoco.mj_kinematics(m, d)
+            mujoco.mj_comPos(m, d)
+            mujoco.mj_comVel(m, d)
+
+        def tensor(name):
+            return torch.as_tensor(
+                np.stack([getattr(d, name) for d in self.fk]),
+                device=self.device,
+                dtype=torch.float32,
+            )
+
+        pos = tensor("xpos")[:, self.body_ids]
+        quat = tensor("xquat")[:, self.body_ids]
+        cv = tensor("cvel")[:, self.body_ids]
+        # Compute the origin shift in native precision before casting policy tensors.
+        bids = self.native_body_ids
+        roots = self.native_root_ids
+        velocities = []
+        for d in self.fk:
+            cvel = d.cvel[bids]
+            velocities.append(
+                cvel[..., 3:]
+                + np.cross(cvel[..., :3], d.xpos[bids] - d.subtree_com[roots])
+            )
+        vel = torch.as_tensor(
+            np.stack(velocities), device=self.device, dtype=torch.float32
+        )
         return dict(
             position=pos,
             quaternion=quat,
             velocity=vel,
             angular=cv[..., :3],
-            joint_position=wp.to_torch(self.data.qpos)[:, self.qi],
-            joint_velocity=wp.to_torch(self.data.qvel)[:, self.vi],
+            joint_position=self.data.qpos[:, self.qi].float(),
+            joint_velocity=self.data.qvel[:, self.vi].float(),
             joint_acceleration=self.joint_acceleration,
         )
+
+    def diagnostic_state(self):
+        return {
+            "physics_backend": self.backend,
+            "physics_steps": self.steps,
+            "state": {
+                name: getattr(self.data, name).detach().cpu().clone()
+                for name in self.fields
+            },
+            "contacts": [
+                {
+                    name: np.array(
+                        getattr(d.contact, name)[: d.ncon], copy=True
+                    )
+                    for name in (
+                        "geom",
+                        "dim",
+                        "dist",
+                        "frame",
+                        "pos",
+                        "efc_address",
+                        "friction",
+                    )
+                }
+                for d in self.native
+            ],
+            "constraint_force": [d.efc_force.copy() for d in self.native],
+            "body_ipos": self.model.body_ipos.cpu().clone(),
+            "targets": self.targets.cpu().clone(),
+            "joint_acceleration": self.joint_acceleration.cpu().clone(),
+            "net_history": self.net_history.cpu().clone(),
+            "paired_history": self.paired_history.cpu().clone(),
+        }
