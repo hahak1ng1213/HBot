@@ -130,6 +130,44 @@ def test_pinned_full_body_library_and_no_source_mutation(
         }
 
 
+def test_punch_crop_precedes_retiming_and_preserves_source_provenance(
+    originals,
+):
+    model = solo_model()
+    whole = reference.MotionLibrary(
+        originals, model, JOINT_NAMES, BODY_NAMES, skill="punch"
+    )
+    cropped = reference.MotionLibrary(
+        originals,
+        model,
+        JOINT_NAMES,
+        BODY_NAMES,
+        skill="punch",
+        punch_bounds=(90, 601),
+        speed_scale=1.5,
+    )
+    for a, b in zip(whole.clips, cropped.clips, strict=True):
+        assert b["source_bounds"] == [90, 601]
+        assert b["frames"] == 341
+        assert a["source_sha256"] == b["source_sha256"]
+        torch.testing.assert_close(
+            b["joint_position"][::2], a["joint_position"][90:601:3]
+        )
+        torch.testing.assert_close(
+            b["joint_velocity"][::2], a["joint_velocity"][90:601:3] * 1.5
+        )
+    with pytest.raises(ValueError, match="exceed"):
+        reference.MotionLibrary(
+            originals,
+            model,
+            JOINT_NAMES,
+            BODY_NAMES,
+            skill="punch",
+            punch_bounds=(90, 901),
+            speed_scale=1.5,
+        )
+
+
 def test_named_joints_reorder_without_altering_poses(originals):
     order = tuple(reversed(JOINT_NAMES))
     library = reference.MotionLibrary(

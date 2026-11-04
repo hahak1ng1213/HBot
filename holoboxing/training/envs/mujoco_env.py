@@ -160,11 +160,14 @@ class MujocoSandbagEnv:
         rapid_approach=False,
         lower_cuda_graphs=False,
         physics_threads=1,
+        capture_transition_state=False,
     ):
         self.device, self.num_envs = torch.device(device), worlds
         self.standing_reference = standing_reference
         self.official_rules = official_rules
         self.rapid_approach = rapid_approach
+        self.capture_transition_state = capture_transition_state
+        self.last_transition_state = None
         self.distance_curriculum = None
         if distance_curriculum:
             if not official_rules:
@@ -761,6 +764,12 @@ class MujocoSandbagEnv:
                 done,
                 invalid,
             )
+        # Opt-in task adapters must score the state BEFORE automatic reset.
+        if self.capture_transition_state:
+            self.last_transition_state = {
+                key: value.detach().clone()
+                for key, value in self.physics.state().items()
+            }
         ids = done.nonzero().flatten()
         if len(ids):
             self._reset(ids)

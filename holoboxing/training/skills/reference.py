@@ -13,7 +13,7 @@ from pathlib import Path
 import mujoco
 import numpy as np
 import torch
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation, Slerp
 
 from holoboxing.data.augment_punch import CATALOG
 from holoboxing.data.common import sha256
@@ -55,6 +55,53 @@ TENSOR_FIELDS = (
     "point_quaternion",
     "point_velocity",
 )
+
+
+def retime_trajectory(trajectory, speed_scale):
+    """Resample source time at 50 Hz; scale ALL supplied velocity labels.
+
+    Original arrays/files are never changed. The final sample is the last
+    complete control interval (duration rounding is less than 20 ms).
+    """
+    if not math.isfinite(speed_scale) or speed_scale <= 0:
+        raise ValueError("speed_scale must be finite and positive")
+    if speed_scale == 1:
+        return trajectory
+    frames = len(trajectory["joint_position"])
+    query = (
+        np.arange(int(np.floor((frames - 1) / speed_scale)) + 1) * speed_scale
+    )
+    if len(query) < 6:
+        raise ValueError("Retimed motion needs at least six control frames")
+    result = dict(trajectory)
+    for key in (
+        "root_position",
+        "joint_position",
+        "root_origin_velocity",
+        "root_angular_velocity_world",
+        "joint_velocity",
+    ):
+        value = trajectory[key]
+        flat = value.reshape(frames, -1)
+        sampled = np.stack(
+            [np.interp(query, np.arange(frames), column) for column in flat.T],
+            -1,
+        ).reshape((len(query), *value.shape[1:]))
+        result[key] = sampled * speed_scale if "velocity" in key else sampled
+    result["root_quaternion"] = np.stack(
+        [
+            Slerp(
+                np.arange(frames),
+                Rotation.from_quat(
+                    trajectory["root_quaternion"][:, role, [1, 2, 3, 0]]
+                ),
+            )(query).as_quat()[:, [3, 0, 1, 2]]
+            for role in range(trajectory["roles"])
+        ],
+        1,
+    )
+    result["amp_root_quaternion"] = result["root_quaternion"].copy()
+    return result
 
 
 def _model_indices(model, joint_names, body_names):
@@ -188,9 +235,20 @@ class MotionLibrary:
         device="cpu",
         punch_groups=("kangning-001", "kangning-003"),
         locomotion_mode="directional",
+        speed_scale=1.0,
+        punch_bounds=None,
     ):
         if skill not in {"punch", "locomotion"}:
             raise ValueError("Choose punch or locomotion")
+        if punch_bounds is not None and (
+            skill != "punch"
+            or len(punch_bounds) != 2
+            or any(type(v) is not int for v in punch_bounds)
+            or not 0 <= punch_bounds[0] < punch_bounds[1]
+        ):
+            raise ValueError(
+                "punch_bounds must be a punch-only [start,end) source interval"
+            )
         if skill == "locomotion" and locomotion_mode not in {
             "directional",
             "full",
@@ -198,6 +256,8 @@ class MotionLibrary:
         }:
             raise ValueError("Choose directional, full or forward locomotion")
         self.device = torch.device(device)
+        if not math.isfinite(speed_scale) or speed_scale <= 0:
+            raise ValueError("speed_scale must be finite and positive")
         self.joint_names, self.body_names = (
             tuple(joint_names),
             tuple(body_names),
@@ -212,7 +272,7 @@ class MotionLibrary:
                 (
                     "punch_" + group.removeprefix("kangning-"),
                     group,
-                    None,
+                    punch_bounds,
                     (0.0, 0.0),
                 )
                 for group in punch_groups
@@ -239,6 +299,21 @@ class MotionLibrary:
         for name, group, bounds, direction in descriptions:
             trajectory, row = sources[group]
             bounds = bounds or (0, len(trajectory["joint_position"]))
+            source_bounds = bounds
+            if (
+                not 0
+                <= bounds[0]
+                < bounds[1]
+                <= len(trajectory["joint_position"])
+            ):
+                raise ValueError("Source bounds exceed original motion")
+            if speed_scale != 1:
+                trajectory = dict(trajectory)
+                for key, value in tuple(trajectory.items()):
+                    if isinstance(value, np.ndarray):
+                        trajectory[key] = value[bounds[0] : bounds[1]].copy()
+                trajectory = retime_trajectory(trajectory, speed_scale)
+                bounds = (0, len(trajectory["joint_position"]))
             arrays = reference_kinematics(
                 model, trajectory, self.joint_names, self.body_names, bounds
             )
@@ -272,7 +347,7 @@ class MotionLibrary:
                 "group": group,
                 "source_path": row["path"],
                 "source_sha256": row["sha256"],
-                "source_bounds": list(bounds),
+                "source_bounds": list(source_bounds),
                 "frames": bounds[1] - bounds[0],
                 "direction": list(direction),
                 "guard_heading_world": heading,
@@ -342,7 +417,7 @@ class MotionLibrary:
             "body_names": list(self.body_names),
             "clips": summaries,
             "fps": 50,
-            "speed_scale": 1.0,
+            "speed_scale": speed_scale,
             "physics_rollouts_collected": False,
             "coordinate_transform": (
                 "subtract clip initial root XY from all positions; "

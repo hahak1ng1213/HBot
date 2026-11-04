@@ -110,6 +110,9 @@ def advantages(reward, done, values, final_value, gamma=0.995, lam=0.95):
 def reset_training_rows(env, ids):
     if not len(ids):
         return
+    if hasattr(env, "reset_training_rows"):
+        env.reset_training_rows(ids)
+        return
     clips = torch.randint(
         len(env.library.clips),
         (len(ids),),
@@ -135,7 +138,7 @@ def reset_training_rows(env, ids):
 
 def checkpoint(env, model, optimizer, update, args):
     return {
-        "format": "solo_skill_teacher_v1",
+        "format": getattr(env, "checkpoint_format", "solo_skill_teacher_v1"),
         "skill": args.skill,
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
@@ -152,7 +155,8 @@ def checkpoint(env, model, optimizer, update, args):
         "environment_rng_state": env.rng.get_state(),
         "is_competition_submission": False,
         "simulator_continuity_saved": False,
-        "implementation_sources": implementation_identity(),
+        "implementation_sources": getattr(env, "implementation_sources", None)
+        or implementation_identity(),
     }
 
 
@@ -366,6 +370,13 @@ def parse_arguments(argv=None):
     add_controller_arguments(parser)
     parser.add_argument("--source", type=existing_path, required=True)
     parser.add_argument(
+        "--punch-groups", nargs="+", default=["kangning-001", "kangning-003"]
+    )
+    parser.add_argument("--speed-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--punch-bounds", type=int, nargs=2, metavar=("START", "END")
+    )
+    parser.add_argument(
         "--skill", choices=("punch", "locomotion"), required=True
     )
     parser.add_argument(
@@ -400,6 +411,8 @@ def parse_arguments(argv=None):
         parser.error(str(error))
     if args.output.exists() or args.output.is_symlink():
         parser.error("--output must be new")
+    if not math.isfinite(args.speed_scale) or args.speed_scale <= 0:
+        parser.error("--speed-scale must be finite and positive")
     if args.mode == "evaluate" and not args.checkpoint:
         parser.error("Evaluation requires --checkpoint")
     if args.mode != "evaluate" and args.checkpoint:
@@ -436,6 +449,9 @@ def main(argv=None):
             skill=args.skill,
             device=args.device,
             locomotion_mode=args.locomotion_mode,
+            punch_groups=args.punch_groups,
+            speed_scale=args.speed_scale,
+            punch_bounds=args.punch_bounds,
         )
         env = SkillTrackingEnv(physics, library, seed=args.seed)
         if args.mode == "train":
