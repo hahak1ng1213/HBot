@@ -1,159 +1,70 @@
-> **HBot collaboration baseline (2026-11-04):** [当前拳击进展与复现说明](docs/boxing_validated_baseline.zh-CN.md) · [协作约定](CONTRIBUTING.md). The validated progress is partial simulation behavior, not a completed competition policy.
+# HBot · G1 拳击仿真
 
-<div align="center">
+本仓库用于团队参加 H-bot 拳击仿真比赛，围绕 Unitree G1 开发高层策略，
+包括步法移动、转向接近、拳法执行，以及接触冲量和比赛行为评测。
 
-<img src="assets/media/holomotion_logo_text.jpg" alt="HoloMotion Logo" width="600"/>
+高层策略通过五点目标驱动指定的冻结 HoloMotion V2 底层控制器。
+五点分别为骨盆、左右手腕和左右脚踝；底层负责将目标转换为关节控制。
+团队当前主要开发高层策略、训练环境与验证工具。
 
-[![Safari](https://img.shields.io/badge/Website-006CFF?logo=safari&logoColor=fff)](https://horizonrobotics.github.io/robot_lab/holomotion/)
-[![HuggingFace](https://img.shields.io/badge/-HuggingFace-3B4252?style=flat&logo=huggingface&logoColor=)](https://huggingface.co/collections/HorizonRobotics/holomotion)
-[![Docker Hub](https://img.shields.io/badge/Docker_Hub-2496ED?style=flat&logo=docker&logoColor=white)](https://hub.docker.com/r/horizonrobotics/holomotion/tags)
-[![WeChat](https://img.shields.io/badge/Wechat-7BB32E?logo=wechat&logoColor=white)](https://horizonrobotics.feishu.cn/docx/Xs3cdEI8bo1EZuxUfzjckTgKn2c)
-[![arXiv](https://img.shields.io/badge/arXiv-2605.15336-red?logo=arxiv&logoColor=white)](https://arxiv.org/abs/2605.15336)
-[![Bilibili](https://img.shields.io/badge/Bilibili-FB7299?logo=bilibili&logoColor=white)](https://space.bilibili.com/650643249)
+## 当前进展
 
+截至 2026-11-04，仓库已整理以下可复用内容：
 
-</div>
+- 单机器人参考动作跟踪、技能训练与连续物理评测。
+- 已学前进步法配合脚本控制的导航演示，完成过 5 米接近并停稳。
+- `kangning-028` 转体参考，以及 `045` 短片段和其他连招的跟踪基线。
+- 双机器人接触测量，按物理子步记录法向力、冲量和合法目标接触。
+- 源码与数据来源校验、回归测试和 GitHub Actions 自动检查。
 
-## 拳击开发说明
+多方向快速转向、连贯接近并在拳距内停稳，以及稳定有效的混合拳攻击仍在开发中。
+目前成果是局部仿真行为与评测工具，尚未完成整套比赛策略验收。
 
-当前拳击扩展的操作说明见[规则对齐与独立评测工作流](docs/boxing_competition_workflow.zh-CN.md)。
+具体结果、限制和复现命令见[当前进展与基线说明](docs/boxing_validated_baseline.zh-CN.md)。
 
-# Latest News
+## 使用入口
 
-- [2026.10.24] 🚀 **We now support [SuperMimic](docs/supermimic.md) in HoloMotion!** Train G1 motion trackers from scratch on **a single GPU**, with **MuJoCo Warp or Isaac PhysX**. We achieved **80% SR on LAFAN1 in 30 minutes on a single RTX 5090**.
+| 需求 | 文档 |
+| --- | --- |
+| 了解已验证成果并复现实验 | [当前进展与基线说明](docs/boxing_validated_baseline.zh-CN.md) |
+| 安装训练环境、了解本项目物理后端 | [规则对齐与独立评测工作流](docs/boxing_competition_workflow.zh-CN.md#cpu-physics-20261030) |
+| 查阅比赛接口、模型导出与正式评测 | [拳击仿真使用文档](holoboxing/README.zh-CN.md) |
+| 加入开发、提交改动和运行检查 | [协作约定](CONTRIBUTING.md) |
+| 核对实验摘要与文件哈希 | [历史验证记录](experiments/validated_progress_20261103.json) |
 
-  <p align="center">
-    <a href="docs/supermimic.md"><img src="docs/media/supermimic_training_progress.webp" alt="HoloMotion: PPO and SuperMimic training in MuJoCo Warp and Isaac PhysX" width="640"></a>
-  </p>
+环境与资产准备好后，按基线说明选择训练或评测入口，并为每次运行指定新的输出目录。
+本地训练使用原生 MuJoCo CPU 物理，神经网络可使用 GPU；正式比赛评测环境单独管理。
+上游教程中的训练配置与耗时不能直接视为本项目的验证结果。
 
-- [2026.10.22] The [H-bot Competition](https://hbot-competition.horizon.auto/) is open! [**HoloBoxing**](https://arxiv.org/abs/2610.32909) learns boxing with about **7 minutes of additional single-GPU training** above frozen HoloMotion; see the [Track 2 tutorial](holoboxing/README.md).
-- [2026.10.12] HoloMotion v2.0 brings one policy for sparse-to-whole-body control, with initial 1-point and 5-point real-robot teleoperation demonstrated.
+## 主要目录
 
+| 路径 | 用途 |
+| --- | --- |
+| `holoboxing/training/skills/` | 单机器人技能训练、参考动作、步法与导航演示 |
+| `holoboxing/experiments/` | `045` 跟踪、双机器人冲量测量及来源记录 |
+| `holoboxing/evaluation/` | 比赛评测、规则与接触语义 |
+| `tests/` | 数据、控制接口和物理处理的回归测试 |
+| `experiments/` | 纳入版本管理的实验摘要 |
+| `docs/` | 环境说明、开发记录和复现文档 |
 
-# Why HoloMotion?
+## 协作与验证
 
-## Scales Toward 4-Any Humanoid Control
+从最新 `main` 创建功能分支，通过 PR 提交改动。配置检查环境后运行：
 
-HoloMotion progresses from general motion tracking in v1 to flexible command following in v2, then toward cross-embodiment generalization in v3 and terrain generalization in v4.
-
-<p align="center">
-  <img src="assets/media/holomotion_roadmap.jpg" alt="HoloMotion 4-Any roadmap" width="100%">
-</p>
-
-| Version | Target Capability | Status | Focus |
-| --- | --- | --- | --- |
-| **v1** | Any Pose | ✅ Released | Scale motion tracking with large pretrained models, fast inference, and generalization to unseen motions and real robots. |
-| **v2** | Any Command | 🚀 Preview | Unify sparse-to-whole-body commands in one policy, with an SMPL interface for cross-modal extensions. |
-| **v3** | Any Embodiment | 🧭 Planned | Generalize motion and command following across humanoids with different morphologies and actuation. |
-| **v4** | Any Terrain | 🧭 Planned | Adapt whole-body control to uneven and dynamic terrain, maintaining balance and coordinated motion in complex environments. |
-
-### HoloMotion v1: Larger, Faster and Stronger as a Motion Tracker
-
-HoloMotion v1 uses a reference-conditioned MoE Transformer to track diverse human motions on humanoid robots.
-
-- **Larger:** Up to 0.4B parameters trained on 2,000+ hours of motion, combining video-derived data with motion capture.
-- **Faster:** Sequence-level training and KV-cache inference support efficient learning and real-time control.
-- **Stronger:** Generalization to unseen motion datasets and real-robot transfer without task-specific fine-tuning, as documented in the [HoloMotion-1 Technical Report](https://arxiv.org/abs/2605.15336).
-
-<p align="center">
-  <img src="assets/media/holomotion_overview.jpg" alt="HoloMotion v1 motion tracker architecture and results" width="100%">
-</p>
-
-### HoloMotion v2: Flexible Sparse-to-Whole-Body Command Following with Cross-Modal Extensibility
-
-- **One policy, multiple command modes:** Pelvis-1 and Keypoint-5 (pelvis, wrists, and ankles) use the same model with selectable control-point masks.
-- **Cross-modal extensibility through SMPL:** The shared SMPL interface is designed to simplify integration of external text-to-motion and music-to-motion models; these adapters are not yet included.
-- **Live teleoperation:** Initial 1-point and 5-point PICO VR trials have been completed on G1. See [deployment](docs/realworld_deployment.md).
-
-v2.0 is in release preparation; real-robot gait and tracking quality are still being refined, especially for pelvis-only control. Validation coverage varies across modes.
-
-## One End-to-End Framework: From Motion Data to Robot Control
-
-<p align="center">
-  <img src="assets/media/holomotion_pipeline.jpg" alt="HoloMotion workflow from motion data through training and evaluation to robot deployment" width="100%">
-</p>
-
-[Motion Conversion](holosmpl/README.md) → [Retargeting](docs/motion_retargeting.md) → [Policy Training](docs/train_motion_tracking.md) → [Simulation Evaluation](docs/evaluate_motion_tracking.md) → [Robot Deployment](docs/realworld_deployment.md)
-
-### Unifies Diverse Motion Sources
-
-[HoloSMPL](holosmpl/README.md) standardizes VR, inertial, optical, and vision capture into a shared representation. [HoloRetarget](docs/motion_retargeting.md) converts these motions into robot references for data generation and live teleoperation.
-
-<p align="center">
-  <img src="assets/media/holosmpl_capture_sources.jpg" alt="HoloSMPL inputs from VR, inertial, optical, and vision capture" width="100%">
-</p>
-
-### No Per-User Training Required
-
-Start with the [v2.0.0 motion-tracking checkpoint](https://huggingface.co/HorizonRobotics/HoloMotion_models/tree/main/HoloMotion_motion_tracking_model_v2.0.0) for simulation and live control; train or fine-tune only when you need to adapt the policy.
-
-| Goal | Guide | Starting Point |
-| --- | --- | --- |
-| Replay a motion in MuJoCo | [Sim2sim](docs/evaluate_motion_tracking.md#2-sim2sim-inspect-a-reference-motion) | ONNX/config bundle and a robot NPZ clip. |
-| Evaluate a motion dataset | [Quantitative evaluation](docs/evaluate_motion_tracking.md#3-quantitative-evaluation-on-your-hdf5-dataset) | ONNX/config bundle, actor weights, and robot HDF5 data. |
-| Validate and test a boxing policy | [HoloBoxing local evaluation](holoboxing/README.md) | Your high-level boxing policy (ONNX), the bundled evaluation image, and a compatible GPU. |
-| Teleoperate a G1 | [Robot deployment](docs/realworld_deployment.md) | G1 29-DOF with Orin, matching deployment image, and PICO / XRoboToolkit. |
-| Train or fine-tune | [Training](docs/train_motion_tracking.md) | Labeled robot HDF5 data and GPU resources; a compatible checkpoint for fine-tuning. |
-| Train a lightweight motion tracker from scratch | [SuperMimic](docs/supermimic.md) | G1 reference motions, one CUDA GPU, and the selected simulator environment. |
-
-For workstation workflows, begin with [environment setup](docs/environment_setup.md). Each guide specifies the required artifacts and commands.
-
-# Projects Using HoloMotion
-
-| Organization | Project | Use of HoloMotion | Links |
-| --- | --- | --- | --- |
-| **Tsinghua University · MARS Lab** | **OMG** | Uses HoloMotion as the tracker for executing generated motions, with G1 deployment workflows. | [Paper](https://arxiv.org/abs/2606.10340) / [Project](https://tsinghua-mars-lab.github.io/OMG/) / [Code](https://github.com/Tsinghua-MARS-Lab/OMG) |
-| **Peking University · School of Computer Science** | **HumanoidTTT** | Keeps HoloMotion frozen as the whole-body tracker for reusing validated motions. | [Paper](https://arxiv.org/abs/2610.00198) / [Project](https://aigeeksgroup.github.io/HumanoidTTT/) / [Code](https://github.com/AIGeeksGroup/HumanoidTTT) |
-| **RoboParty Lab** | **sim2real** | Supports the official HoloMotion v1.4.0 ONNX policy in its simulation and robot deployment stack. | [Code](https://github.com/EGalahad/sim2real) / [Docs](https://egalahad.github.io/sim2real/) |
-| **ccrpRepo** | **RoboMimic Deploy** | Implements HoloMotion as a selectable G1 policy, with ONNX inference and motion or velocity tracking modes. | [Code](https://github.com/ccrpRepo/RoboMimic_Deploy) / [HoloMotion policy](https://github.com/ccrpRepo/RoboMimic_Deploy/blob/master/policy/holomotion/HoloMotion.py) |
-| **Renforce Dynamics** | **GenesisLab / genPiHub** | Integrates HoloMotion v1.2 into Genesis simulation. Velocity tracking is implemented; motion tracking is still in progress. | [GenesisLab](https://github.com/Renforce-Dynamics/genesislab) / [genPiHub](https://github.com/Renforce-Dynamics/genPiHub) |
-
-
-# Citation
-
-The **HoloMotion-2 Technical Report** is scheduled for release alongside **HoloMotion v2.1 at the end of October 2026**. In the meantime, please cite the HoloMotion-1 report:
-
-```bibtex
-@misc{chen2026holomotion1,
-  title = {HoloMotion-1 Technical Report},
-  author = {Maiyue Chen and Kaihui Wang and Bo Zhang and Xihan Ma and Zhiyuan Yang and Yi Ren and Qijun Huang and Zihao Zhu and Yucheng Wang and Zhizhong Su},
-  year = {2026},
-  eprint = {2605.15336},
-  archivePrefix = {arXiv},
-  primaryClass = {cs.RO},
-  url = {https://arxiv.org/abs/2605.15336}
-}
+```bash
+python tools/check_boxing_baseline.py
 ```
 
-For the HoloBoxing method and boxing experiments, please cite [the HoloBoxing paper](https://arxiv.org/abs/2610.32909):
+涉及机器人行为的改动，还需提交指定冻结底层下的连续物理仿真结果。
+单元测试通过或训练结束不等于动作、击打或导航验收通过。
 
-```bibtex
-@misc{ma2026holoboxing,
-  title = {{HoloBoxing}: A Simple Recipe for Humanoid Boxing with 7 Minutes of Single-GPU Training},
-  author = {Xihan Ma and Bo Zhang and Boxiong Li and Yuhan Bao and Ziyue Liu and Yucheng Wang},
-  year = {2026},
-  eprint = {2610.32909},
-  archivePrefix = {arXiv},
-  primaryClass = {cs.RO},
-  url = {https://arxiv.org/abs/2610.32909}
-}
-```
+模型权重、原始动作、视频和状态轨迹通过独立存储共享；仓库保留配置、来源和 SHA-256。
+已验证前进步法的 checkpoint 尚未在 GitHub 发布，获取与兼容性说明见基线文档。
 
-# Acknowledgements
+## 上游来源与许可
 
-Built on and inspired by these open-source projects:
+本项目基于 [HoloMotion / HoloBoxing](https://github.com/HorizonRobotics/HoloMotion)
+代码与指定冻结控制器开展开发，并使用 [RoboStriker](https://github.com/yinkangning0124/RoboStriker-Preview)
+的参考动作。上游项目是本仓库的技术与数据来源。
 
-- [ASAP](https://github.com/LeCAR-Lab/ASAP)
-- [BeyondMimic](https://github.com/HybridRobotics/whole_body_tracking)
-- [GMR](https://github.com/YanjieZe/GMR)
-- [GVHMR](https://github.com/zju3dv/GVHMR)
-- [Humanoidverse](https://github.com/LeCAR-Lab/HumanoidVerse)
-- [Mink](https://github.com/kevinzakka/mink)
-- [MotionMillion](https://github.com/VankouF/MotionMillion-Codes)
-- [PBHC](https://github.com/TeleHuman/PBHC)
-- [PHC](https://github.com/ZhengyiLuo/PHC)
-- [ProtoMotion](https://github.com/NVlabs/ProtoMotions/tree/main/protomotions)
-- [RoboStriker](https://github.com/yinkangning0124/RoboStriker-Preview)
-- [ScaleBFM](https://github.com/zengweishuai/ScaleBFM)
-- [SONIC](https://github.com/NVlabs/GR00T-WholeBodyControl)
-- [SuperMimic](https://arxiv.org/abs/2610.28480) [[1]](https://github.com/zita-ch/supermimic_vibed) [[2]](https://github.com/CuboiLeo/SuperMimic-Reproduced).
+许可证和第三方声明见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)；相关源码中的版权说明继续保留。
