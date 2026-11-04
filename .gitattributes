@@ -30,3 +30,9 @@ holoboxing/viewer/notices/* -whitespace
 # Keep the compact training-reward documentation figure directly in Git.
 docs/media/supermimic_training_reward_20261024.png -filter -diff -merge -text
 docs/media/supermimic_training_loop_en.png -filter -diff -merge -text
+
+# Stable source/catalog hashes across Windows and Linux skill runs.
+holoboxing/training/skills/*.py text eol=lf
+holoboxing/data/profiles/robostriker.json text eol=lf
+holoboxing/experiments/*.py text eol=lf
+holoboxing/experiments/*.json text eol=lf

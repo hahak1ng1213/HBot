@@ -6,11 +6,12 @@ implementation before large runs; it intentionally shares the actual referee.
 
 import numpy as np
 
-from holoboxing.evaluation.runtime.rules import MatchStateMachine
-from holoboxing.evaluation.runtime.hand_hit_rules import (
-    hand_index,
-    target_part,
+from holoboxing.evaluation.runtime.contact_geometry import (
+    opponent_target_semantic,
+    strike_geometry,
 )
+from holoboxing.evaluation.runtime.hand_hit_rules import target_part
+from holoboxing.evaluation.runtime.rules import MatchStateMachine
 
 
 class OfficialReferees:
@@ -117,26 +118,21 @@ def contact_records(
     count,
     num_worlds,
 ):
-    """Keep each solver contact once; integrate only its positive normal force."""
+    """Deduplicate solver contacts and integrate positive normal force."""
     result = [[] for _ in range(num_worlds)]
     for c in range(count):
         w = int(worlds[c])
         g0, g1 = (int(x) for x in pairs[c])
         if not 0 <= w < num_worlds or min(g0, g1) < 0:
             continue
-        names = [model.body(int(model.geom_bodyid[g])).name for g in (g0, g1)]
+        geoms = (g0, g1)
         for side in (0, 1):
-            own, other = names[side], names[1 - side]
-            actor = (
-                0
-                if own.startswith("p1_")
-                else 1
-                if own.startswith("p2_")
-                else None
-            )
-            if actor is None or not other.startswith(("p2_", "p1_")[actor]):
+            strike = strike_geometry(model, geoms[side])
+            if strike is None or strike[1] not in ("left_hand", "right_hand"):
                 continue
-            if hand_index(own) is None or target_part(other) is None:
+            actor, own = strike
+            target = opponent_target_semantic(model, actor, geoms[1 - side])
+            if target is None or target_part(target[2]) is None:
                 continue
             normal_force = float(np.dot(forces[c, :3], normals[c]))
             if not np.isfinite(normal_force):
@@ -146,7 +142,7 @@ def contact_records(
                     attacker=actor,
                     defender=1 - actor,
                     attacking_body=own,
-                    target_body=other,
+                    target_body=target[2],
                     pair_id=c,
                     physical_contact=bool(distances[c] <= 0),
                     normal_force_n=max(0.0, normal_force),

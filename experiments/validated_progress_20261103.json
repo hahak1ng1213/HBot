@@ -1,0 +1,966 @@
+{
+  "format": "hbot_curated_progress_v1",
+  "experiment_date": "2026-11-03",
+  "curation_date": "2026-11-04",
+  "scope": "Historical physical simulation evidence, not reruns of the curated Git revision; no real-robot tests",
+  "original_reports": {
+    "short_reference": {
+      "artifact_relative_path": "demos/combo45-reference-baseline-20261103/results/measurements.json",
+      "sha256": "327061f5e1596be7482852f39790f56fbf586898ae00fac79e57604c2f057f30",
+      "bundled": false
+    },
+    "short_impulse": {
+      "artifact_relative_path": "demos/combo45-impulse-20261103/results/analysis.json",
+      "sha256": "cc5184e540d58a8ecc0686d95fffac8e07834c03efcb5ef51a83e518ac8bef4a",
+      "bundled": false
+    },
+    "long_combos": {
+      "artifact_relative_path": "demos/combo45-other-combos-20261103/merged-results/analysis.json",
+      "sha256": "20b6d6251bf751aa78c019fa316d5091d4a74582e65a42ad868913f7e6d3785f",
+      "bundled": false
+    },
+    "forward_waypoint": {
+      "artifact_relative_path": "demos/waypoint-navigation-20261103/far-settle6/report.json",
+      "sha256": "b7aeb5cc192a385d275919ad6cc1e6bdf22250dba9660e7d49374aa659132074",
+      "bundled": false
+    },
+    "strike_band": {
+      "artifact_relative_path": "demos/waypoint-navigation-20261103/strike-band/report.json",
+      "sha256": "5392ab88cedaf5df0b4301f4137be3b0da3fc2fb969c81a043e48412f39dfb5c",
+      "bundled": false
+    },
+    "excluded_navigation": {
+      "artifact_relative_path": "diagnostics/goal-turn-navigation-20261103-final-query/report.json",
+      "sha256": "e988f17552e06cdae4a6554683e239b416c9f1602e3e465dfd76d01eb55433a4",
+      "bundled": false
+    }
+  },
+  "forward_teacher": {
+    "filename": "model_002048.pt",
+    "sha256": "46d78e9a65a6e74a798c370c1eac44edf80fcd06d9fa1b93ca017697d00f9dd3",
+    "update": 2048,
+    "seed": 55,
+    "num_envs": 16,
+    "rollout_steps": 32,
+    "catalog_sha256": "e02178047b12bbd66d4adb4399e5618c63af7efd9d98ec8effcda5ea6fd89b03",
+    "source_clips": [
+      {
+        "name": "forward_1",
+        "source_sha256": "e3457d034430808c9e6f58c4b0131e872374b2139fcb65219cd6adf9ccc65eab",
+        "source_bounds": [
+          85,
+          275
+        ]
+      },
+      {
+        "name": "forward_2",
+        "source_sha256": "e3457d034430808c9e6f58c4b0131e872374b2139fcb65219cd6adf9ccc65eab",
+        "source_bounds": [
+          425,
+          574
+        ]
+      }
+    ],
+    "lower_sha256": {
+      "config.yaml": "e8ad79d65bbe9fa030927dd7f32ef777e6ad8fea8ee825310920f438255f4e10",
+      "exported/model_10500.onnx": "b0681976135eed572d1d20aefc52ec65c149bdc636f2594a6436fa7136a3fc86"
+    },
+    "distribution": "Not bundled or publicly released; project maintainer must provide through authorized artifact storage, or retrain and revalidate"
+  },
+  "navigation": {
+    "forward_waypoint": {
+      "goal_world_xy": [
+        5.0,
+        0.0
+      ],
+      "arrival_distance_band_m": [
+        0.0,
+        0.3
+      ],
+      "arrival": true,
+      "failed": false,
+      "end_reason": "measured_stable_arrival",
+      "simulation_seconds": 11.6,
+      "stable_arrival_seconds": 1.0,
+      "fallen_samples": 0,
+      "final_distance_m": 0.2800378674323055,
+      "final_speed_mps": 0.014045550487935543,
+      "mid_episode_physics_resets": 0,
+      "states_sha256": "07af67697825d5f81a7f771bdbe40c20cfe0fe51c9a6df62207ace7df2a35b95",
+      "video_sha256": "1acfe02519f77f7f2a8c32b717697f93bdd23723aafa5d347fc7bcb38ac34720"
+    },
+    "strike_band": {
+      "goal_world_xy": [
+        3.0,
+        1.0
+      ],
+      "arrival_distance_band_m": [
+        0.5,
+        0.65
+      ],
+      "arrival": false,
+      "failed": true,
+      "end_reason": "too_close_no_reverse_skill",
+      "simulation_seconds": 10.200000000000001,
+      "stable_arrival_seconds": 0.0,
+      "fallen_samples": 0,
+      "final_distance_m": 0.49763229091924105,
+      "final_speed_mps": 0.6402878761291504,
+      "mid_episode_physics_resets": 0,
+      "states_sha256": "45f777979dd51758a16df2e94743d7781bdb8746071248503cdcf0fb9bf360ce",
+      "video_sha256": "151fca260a1138fbff2574a74e5ae09614c0bd469efe732cc1fbb69a5a1f8d60"
+    }
+  },
+  "short_reference": [
+    {
+      "initialization": "reference",
+      "clip": "short_arc_pair",
+      "source_bounds": [
+        135,
+        225
+      ],
+      "completed_clip_and_settle": true,
+      "fallen_samples": 0,
+      "active_wrist_relative_error_cm": 3.9576996117830276,
+      "active_shoulder_error_deg": 9.59278383077676,
+      "active_elbow_error_deg": 8.31049692260326
+    },
+    {
+      "initialization": "reference",
+      "clip": "longer_extension_pair",
+      "source_bounds": [
+        440,
+        506
+      ],
+      "completed_clip_and_settle": true,
+      "fallen_samples": 0,
+      "active_wrist_relative_error_cm": 3.9772380143404007,
+      "active_shoulder_error_deg": 8.34249892018571,
+      "active_elbow_error_deg": 10.84518524623687
+    },
+    {
+      "initialization": "reference",
+      "clip": "dense_alternation",
+      "source_bounds": [
+        225,
+        340
+      ],
+      "completed_clip_and_settle": true,
+      "fallen_samples": 0,
+      "active_wrist_relative_error_cm": 4.862941801548004,
+      "active_shoulder_error_deg": 10.787157666595734,
+      "active_elbow_error_deg": 11.342080654581652
+    },
+    {
+      "initialization": "neutral",
+      "clip": "short_arc_pair",
+      "source_bounds": [
+        135,
+        225
+      ],
+      "completed_clip_and_settle": true,
+      "fallen_samples": 0,
+      "active_wrist_relative_error_cm": 4.0119171142578125,
+      "active_shoulder_error_deg": 11.939343985232478,
+      "active_elbow_error_deg": 13.028899176727498
+    },
+    {
+      "initialization": "neutral",
+      "clip": "longer_extension_pair",
+      "source_bounds": [
+        440,
+        506
+      ],
+      "completed_clip_and_settle": true,
+      "fallen_samples": 0,
+      "active_wrist_relative_error_cm": 4.03137132525444,
+      "active_shoulder_error_deg": 11.044362953944551,
+      "active_elbow_error_deg": 12.910010342713315
+    },
+    {
+      "initialization": "neutral",
+      "clip": "dense_alternation",
+      "source_bounds": [
+        225,
+        340
+      ],
+      "completed_clip_and_settle": true,
+      "fallen_samples": 0,
+      "active_wrist_relative_error_cm": 5.074365437030792,
+      "active_shoulder_error_deg": 12.107755105823836,
+      "active_elbow_error_deg": 12.743009656185565
+    }
+  ],
+  "short_impulse": {
+    "physical_rollouts": 9,
+    "legal_source_contact_case_count": 1,
+    "all_nine_below_threshold_during_source_motion": true,
+    "maximum_legal_contact_episode": {
+      "index": 0,
+      "first_sample_index": 121,
+      "last_sample_index": 132,
+      "interval_start_s": 1.0050000000000006,
+      "interval_end_s": 1.0649999999999993,
+      "duration_s": 0.06,
+      "positive_force_duration_s": 0.06,
+      "gap_steps": 0,
+      "first_source_phase": 30.5,
+      "last_source_phase": 33.25,
+      "negative_phase_contact_samples": 0,
+      "normal_impulse_ns": 7.143364222550363,
+      "rolling_window_peak_ns": 4.138544592958486,
+      "peak_normal_force_n": 303.95296975009194,
+      "peak_normal_force_time_s": 1.0100000000000005,
+      "world_impulse_on_target_ns": [
+        6.236447024909157,
+        5.224897997726491,
+        3.0548251284890955
+      ],
+      "world_impulse_norm_ns": 8.69049982145981,
+      "hand": "right",
+      "target_category": "legal",
+      "clip": "short_arc_pair",
+      "initial_pelvis_distance_m": 0.5
+    },
+    "rule_necessary_threshold": "20ms legal-target normal impulse >=5 N.s; this is not a match score evaluation"
+  },
+  "long_combos": {
+    "format": "other045_physical_results_analysis_v1",
+    "state": "completed",
+    "verified_artifacts": [
+      {
+        "path": "solo/00-moving_combos_0660_1546/states.npz",
+        "sha256": "6e1cbf16aa0858801f9117e0da5f19ed557b794d9e2842d3ad364ecf09f59f03"
+      },
+      {
+        "path": "solo/00-moving_combos_0660_1546/motion.mp4",
+        "sha256": "65e93edb139e29b708495feb7e247df8c7c3c57df3786f928d8386c1d883e222"
+      },
+      {
+        "path": "solo/01-turning_combos_1420_2274/states.npz",
+        "sha256": "83b624ae18d2bb2f3db8546a3397b40b5d44261449f59a9115a3b7934a351d67"
+      },
+      {
+        "path": "solo/01-turning_combos_1420_2274/motion.mp4",
+        "sha256": "ddeb5a4e39f93e2fb6705784c81a664eb879af64ac2981e9811c3feaf4ee3497"
+      },
+      {
+        "path": "solo/02-late_combos_and_source_end/states.npz",
+        "sha256": "c15d0199c7189a9f0d7fc130b89b9fe9c32066282db9fd50621a0bb77685df66"
+      },
+      {
+        "path": "solo/02-late_combos_and_source_end/motion.mp4",
+        "sha256": "a193240e180474b8b6e4733a008a5663345d75e05f3d957d2f734a959bedc08a"
+      },
+      {
+        "path": "impact/00-moving_combos_0660_1546-d0.500/states.npz",
+        "sha256": "7329554d33998d3294205eb06830c7b48c564229334b199d359fd594ee38941d"
+      },
+      {
+        "path": "impact/00-moving_combos_0660_1546-d0.500/contacts-200hz.npz",
+        "sha256": "16b5024d5308912f6ec1cd045555b35d3dd36ad7b6299dbf45d4c2330ba6bdae"
+      },
+      {
+        "path": "impact/00-moving_combos_0660_1546-d0.500/motion.mp4",
+        "sha256": "3dc862232fa0b62ec8a69b69948fad53f922f41dbd8b2fed991ff3e1b8105009"
+      },
+      {
+        "path": "impact/00-moving_combos_0660_1546-d0.575/states.npz",
+        "sha256": "df77a5d1efcbb6a422db139fc70b7b86236ed0cbb6b9898337c812838dfe2d6f"
+      },
+      {
+        "path": "impact/00-moving_combos_0660_1546-d0.575/contacts-200hz.npz",
+        "sha256": "186c53f12d9edac6443b8b604339aba939663fb16639568406f17a005333ae68"
+      },
+      {
+        "path": "impact/00-moving_combos_0660_1546-d0.575/motion.mp4",
+        "sha256": "7bff9e0f1acdeaed80a7af00037de9b2759d766f585186a2295d6e9a7c21368a"
+      },
+      {
+        "path": "impact/00-moving_combos_0660_1546-d0.650/states.npz",
+        "sha256": "0abfc3b4535c5087b056abe469af5d67697e9b291c6b1d891d6b5f0e9de1cd10"
+      },
+      {
+        "path": "impact/00-moving_combos_0660_1546-d0.650/contacts-200hz.npz",
+        "sha256": "99225bfd77a34659502a059cf6011066515e8d774461c18a369f6ea998cfa246"
+      },
+      {
+        "path": "impact/00-moving_combos_0660_1546-d0.650/motion.mp4",
+        "sha256": "b33a7209e0ded7f92f7155df99124bf75ae83463035c3fd586e3b103563c20df"
+      },
+      {
+        "path": "impact/01-turning_combos_1420_2274-d0.650/states.npz",
+        "sha256": "509dc16879e92c76cf631df77532d40ce2578bfe919c9cd0ae80826f585960fe"
+      },
+      {
+        "path": "impact/01-turning_combos_1420_2274-d0.650/contacts-200hz.npz",
+        "sha256": "d49f3f1ceda0823c6a21222822c426e981ccc551b7c0299c5540da515f59faa9"
+      },
+      {
+        "path": "impact/01-turning_combos_1420_2274-d0.650/motion.mp4",
+        "sha256": "b8ffa320924fd96ac718d6dc58f13afb94fd0e065d6b8845626af18001f1e568"
+      },
+      {
+        "path": "impact/01-turning_combos_1420_2274-d0.700/states.npz",
+        "sha256": "5ef9576bc311a2838bef9a33d5c50d16343af45bd21193319dbb5a1222af7d52"
+      },
+      {
+        "path": "impact/01-turning_combos_1420_2274-d0.700/contacts-200hz.npz",
+        "sha256": "d49f3f1ceda0823c6a21222822c426e981ccc551b7c0299c5540da515f59faa9"
+      },
+      {
+        "path": "impact/01-turning_combos_1420_2274-d0.700/motion.mp4",
+        "sha256": "fe1ba8c17af7b034ada27e7e3260bcffc8c58cf53c0253936c45a27bf565a14d"
+      },
+      {
+        "path": "impact/01-turning_combos_1420_2274-d0.775/states.npz",
+        "sha256": "55412f8e881faa7bbd4f1ea7d116f25e233350f333ef4d49c4d185f56c505cf6"
+      },
+      {
+        "path": "impact/01-turning_combos_1420_2274-d0.775/contacts-200hz.npz",
+        "sha256": "d49f3f1ceda0823c6a21222822c426e981ccc551b7c0299c5540da515f59faa9"
+      },
+      {
+        "path": "impact/01-turning_combos_1420_2274-d0.775/motion.mp4",
+        "sha256": "27f9b72661ba69d8c4445dc86ad4840c85bb05d43d66a2200b253ba35ed390cd"
+      },
+      {
+        "path": "impact/02-late_combos_and_source_end-d0.700/states.npz",
+        "sha256": "283421613b3ae75b3925e0351c4b1582640297880dd203fde4a9148d74749aec"
+      },
+      {
+        "path": "impact/02-late_combos_and_source_end-d0.700/contacts-200hz.npz",
+        "sha256": "22da0639c355e6ce60662f368c6461b0b77336b1a1e82b4816216b13088ed6a2"
+      },
+      {
+        "path": "impact/02-late_combos_and_source_end-d0.700/motion.mp4",
+        "sha256": "e334aea4c78a08763c256afd41b482d90fe9af156cc679d446e73640184e792a"
+      },
+      {
+        "path": "impact/02-late_combos_and_source_end-d0.775/states.npz",
+        "sha256": "5e6a3ca5c248c01c79a8f32027b2ad974c262fb8f417fc6a9530bf271f62ac2e"
+      },
+      {
+        "path": "impact/02-late_combos_and_source_end-d0.775/contacts-200hz.npz",
+        "sha256": "655acb10152a5bce99174a2e56748d7f87b0264f16fe538f0595925c641365f5"
+      },
+      {
+        "path": "impact/02-late_combos_and_source_end-d0.775/motion.mp4",
+        "sha256": "df30b69bf07cdbbabf8e943506713d47c4a051a21d26ba2ee6595110f5496679"
+      },
+      {
+        "path": "impact/02-late_combos_and_source_end-d0.850/states.npz",
+        "sha256": "1be73643fc49a3b97f6174b4ab97b08512bbae98e554cf4bb14c5d81f2fa64d9"
+      },
+      {
+        "path": "impact/02-late_combos_and_source_end-d0.850/contacts-200hz.npz",
+        "sha256": "ee398a53ca886b41a93e57d976fc98cf800648af4e718ce0664aae9188f17ae9"
+      },
+      {
+        "path": "impact/02-late_combos_and_source_end-d0.850/motion.mp4",
+        "sha256": "925ba6a5e469f8325f3d305962e32d4b1cd9ae22ac48655708bf7689e08a3a5f"
+      }
+    ],
+    "artifact_sha256_checks_passed": true,
+    "source_impulse_integrals_recomputed_from_200hz_data": true,
+    "source_entry_and_hold_excluded": true,
+    "artificial_endpoint_hold_s": 0,
+    "original_five_source_files_unchanged": true,
+    "solo_cases_completed": 2,
+    "solo_cases_without_fall": 2,
+    "impact_cases_completed": 9,
+    "impact_attempt_count": 14,
+    "impact_rejected_initial_overlap_count": 5,
+    "impact_physical_rollout_count": 9,
+    "impact_cases_without_fall": 9,
+    "impact_cases_reaching_5ns_necessary_threshold": 0,
+    "clips": [
+      {
+        "clip": "moving_combos_0660_1546",
+        "source_bounds": [
+          330,
+          773
+        ],
+        "source_duration_s": 8.86,
+        "solo": {
+          "state": "completed",
+          "completed": true,
+          "fallen": false,
+          "seconds": 9.24,
+          "source_wrist_relative_error": {
+            "mean_cm": 4.440643787384033,
+            "p95_cm": 7.141902923583984
+          },
+          "active_samples_50hz": 442,
+          "end_reason": "complete_clip_and_settle",
+          "video": "solo/00-moving_combos_0660_1546/motion.mp4"
+        },
+        "impact_cases": [
+          {
+            "clip": "moving_combos_0660_1546",
+            "initial_distance_m": 0.5,
+            "state": "completed",
+            "initial_interrobot_contact_distances_m": [],
+            "completed": true,
+            "seconds": 9.240000000000045,
+            "end_reason": "source_end",
+            "fallen_per_role": [
+              false,
+              false
+            ],
+            "source_legal_20ms_peak_ns": 0.12202430313813327,
+            "source_legal_20ms_peak_ns_by_hand": {
+              "left": 0.12202430313813327,
+              "right": 0.0
+            },
+            "source_unscored_20ms_peak_ns": 0.0,
+            "source_unscored_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_legal_contact_episodes": 1,
+            "largest_legal_episode": {
+              "hand": "left",
+              "target_category": "legal",
+              "normal_impulse_ns": 0.12202430313813327,
+              "duration_s": 0.005,
+              "sustained_contact_over_200ms": false,
+              "interpretation": "continuous contact episode; not automatically a punch",
+              "interval_s": [
+                0.41000000000000025,
+                0.41500000000000026
+              ],
+              "source_phase_interval": [
+                0.75,
+                0.75
+              ],
+              "rolling_20ms_peak_ns": 0.12202430313813327,
+              "peak_normal_force_n": 24.404860627626654,
+              "world_impulse_norm_ns_including_friction": 0.15401593332440422,
+              "targets": [
+                {
+                  "semantic": "torso",
+                  "link": "torso_link",
+                  "contact_point_samples": 1,
+                  "normal_impulse_ns": 0.12202430313813327
+                }
+              ]
+            },
+            "necessary_5ns_window_threshold_reached": false,
+            "positive_separation_normal_impulse_ns": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "video": "impact/00-moving_combos_0660_1546-d0.500/motion.mp4"
+          },
+          {
+            "clip": "moving_combos_0660_1546",
+            "initial_distance_m": 0.575,
+            "state": "completed",
+            "initial_interrobot_contact_distances_m": [],
+            "completed": true,
+            "seconds": 9.240000000000045,
+            "end_reason": "source_end",
+            "fallen_per_role": [
+              false,
+              false
+            ],
+            "source_legal_20ms_peak_ns": 0.0,
+            "source_legal_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_unscored_20ms_peak_ns": 0.0,
+            "source_unscored_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": false,
+            "positive_separation_normal_impulse_ns": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "video": "impact/00-moving_combos_0660_1546-d0.575/motion.mp4"
+          },
+          {
+            "clip": "moving_combos_0660_1546",
+            "initial_distance_m": 0.65,
+            "state": "completed",
+            "initial_interrobot_contact_distances_m": [],
+            "completed": true,
+            "seconds": 9.240000000000045,
+            "end_reason": "source_end",
+            "fallen_per_role": [
+              false,
+              false
+            ],
+            "source_legal_20ms_peak_ns": 0.0,
+            "source_legal_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_unscored_20ms_peak_ns": 0.0,
+            "source_unscored_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": false,
+            "positive_separation_normal_impulse_ns": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "video": "impact/00-moving_combos_0660_1546-d0.650/motion.mp4"
+          }
+        ],
+        "strongest_legal_episode_in_this_test": {
+          "hand": "left",
+          "target_category": "legal",
+          "normal_impulse_ns": 0.12202430313813327,
+          "duration_s": 0.005,
+          "sustained_contact_over_200ms": false,
+          "interpretation": "continuous contact episode; not automatically a punch",
+          "interval_s": [
+            0.41000000000000025,
+            0.41500000000000026
+          ],
+          "source_phase_interval": [
+            0.75,
+            0.75
+          ],
+          "rolling_20ms_peak_ns": 0.12202430313813327,
+          "peak_normal_force_n": 24.404860627626654,
+          "world_impulse_norm_ns_including_friction": 0.15401593332440422,
+          "targets": [
+            {
+              "semantic": "torso",
+              "link": "torso_link",
+              "contact_point_samples": 1,
+              "normal_impulse_ns": 0.12202430313813327
+            }
+          ],
+          "initial_distance_m": 0.5,
+          "video": "impact/00-moving_combos_0660_1546-d0.500/motion.mp4"
+        }
+      },
+      {
+        "clip": "turning_combos_1420_2274",
+        "source_bounds": [
+          710,
+          1137
+        ],
+        "source_duration_s": 8.54,
+        "solo": {
+          "state": "completed",
+          "completed": false,
+          "fallen": true,
+          "seconds": 6.0,
+          "source_wrist_relative_error": {
+            "mean_cm": 12.145495414733887,
+            "p95_cm": 28.32442283630371
+          },
+          "active_samples_50hz": 281,
+          "end_reason": "failure_termination",
+          "video": "solo/01-turning_combos_1420_2274/motion.mp4"
+        },
+        "impact_cases": [
+          {
+            "clip": "turning_combos_1420_2274",
+            "initial_distance_m": 0.5,
+            "state": "rejected_initial_overlap",
+            "initial_interrobot_contact_distances_m": [
+              -0.01125522008550992,
+              -0.06075808981975736,
+              -0.03306352631864845,
+              -0.021412272440885796
+            ],
+            "completed": false,
+            "seconds": null,
+            "end_reason": "rejected_initial_overlap",
+            "fallen_per_role": null,
+            "source_legal_20ms_peak_ns": null,
+            "source_legal_20ms_peak_ns_by_hand": {},
+            "source_unscored_20ms_peak_ns": null,
+            "source_unscored_20ms_peak_ns_by_hand": {},
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": null,
+            "positive_separation_normal_impulse_ns": null,
+            "video": null
+          },
+          {
+            "clip": "turning_combos_1420_2274",
+            "initial_distance_m": 0.575,
+            "state": "rejected_initial_overlap",
+            "initial_interrobot_contact_distances_m": [
+              -0.024382093645020506,
+              -0.031268451686250094,
+              -0.021041440861003423
+            ],
+            "completed": false,
+            "seconds": null,
+            "end_reason": "rejected_initial_overlap",
+            "fallen_per_role": null,
+            "source_legal_20ms_peak_ns": null,
+            "source_legal_20ms_peak_ns_by_hand": {},
+            "source_unscored_20ms_peak_ns": null,
+            "source_unscored_20ms_peak_ns_by_hand": {},
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": null,
+            "positive_separation_normal_impulse_ns": null,
+            "video": null
+          },
+          {
+            "clip": "turning_combos_1420_2274",
+            "initial_distance_m": 0.65,
+            "state": "completed",
+            "initial_interrobot_contact_distances_m": [],
+            "completed": true,
+            "seconds": 8.919999999999995,
+            "end_reason": "source_end",
+            "fallen_per_role": [
+              false,
+              false
+            ],
+            "source_legal_20ms_peak_ns": 0.0,
+            "source_legal_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_unscored_20ms_peak_ns": 0.0,
+            "source_unscored_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": false,
+            "positive_separation_normal_impulse_ns": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "video": "impact/01-turning_combos_1420_2274-d0.650/motion.mp4"
+          },
+          {
+            "clip": "turning_combos_1420_2274",
+            "initial_distance_m": 0.7,
+            "state": "completed",
+            "initial_interrobot_contact_distances_m": [],
+            "completed": true,
+            "seconds": 8.919999999999995,
+            "end_reason": "source_end",
+            "fallen_per_role": [
+              false,
+              false
+            ],
+            "source_legal_20ms_peak_ns": 0.0,
+            "source_legal_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_unscored_20ms_peak_ns": 0.0,
+            "source_unscored_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": false,
+            "positive_separation_normal_impulse_ns": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "video": "impact/01-turning_combos_1420_2274-d0.700/motion.mp4"
+          },
+          {
+            "clip": "turning_combos_1420_2274",
+            "initial_distance_m": 0.775,
+            "state": "completed",
+            "initial_interrobot_contact_distances_m": [],
+            "completed": true,
+            "seconds": 8.919999999999995,
+            "end_reason": "source_end",
+            "fallen_per_role": [
+              false,
+              false
+            ],
+            "source_legal_20ms_peak_ns": 0.0,
+            "source_legal_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_unscored_20ms_peak_ns": 0.0,
+            "source_unscored_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": false,
+            "positive_separation_normal_impulse_ns": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "video": "impact/01-turning_combos_1420_2274-d0.775/motion.mp4"
+          }
+        ],
+        "strongest_legal_episode_in_this_test": null
+      },
+      {
+        "clip": "late_combos_and_source_end",
+        "source_bounds": [
+          1088,
+          1475
+        ],
+        "source_duration_s": 7.74,
+        "solo": {
+          "state": "completed",
+          "completed": true,
+          "fallen": false,
+          "seconds": 8.120000000000001,
+          "source_wrist_relative_error": {
+            "mean_cm": 4.193196773529053,
+            "p95_cm": 7.627745151519775
+          },
+          "active_samples_50hz": 386,
+          "end_reason": "complete_clip_and_settle",
+          "video": "solo/02-late_combos_and_source_end/motion.mp4"
+        },
+        "impact_cases": [
+          {
+            "clip": "late_combos_and_source_end",
+            "initial_distance_m": 0.5,
+            "state": "rejected_initial_overlap",
+            "initial_interrobot_contact_distances_m": [
+              -0.011141610362044613,
+              -0.008018521287281751,
+              -0.014172240390404543,
+              -0.08142982834240975,
+              -0.019625073565508282
+            ],
+            "completed": false,
+            "seconds": null,
+            "end_reason": "rejected_initial_overlap",
+            "fallen_per_role": null,
+            "source_legal_20ms_peak_ns": null,
+            "source_legal_20ms_peak_ns_by_hand": {},
+            "source_unscored_20ms_peak_ns": null,
+            "source_unscored_20ms_peak_ns_by_hand": {},
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": null,
+            "positive_separation_normal_impulse_ns": null,
+            "video": null
+          },
+          {
+            "clip": "late_combos_and_source_end",
+            "initial_distance_m": 0.575,
+            "state": "rejected_initial_overlap",
+            "initial_interrobot_contact_distances_m": [
+              -0.0674617621200652,
+              -0.03224764111751084
+            ],
+            "completed": false,
+            "seconds": null,
+            "end_reason": "rejected_initial_overlap",
+            "fallen_per_role": null,
+            "source_legal_20ms_peak_ns": null,
+            "source_legal_20ms_peak_ns_by_hand": {},
+            "source_unscored_20ms_peak_ns": null,
+            "source_unscored_20ms_peak_ns_by_hand": {},
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": null,
+            "positive_separation_normal_impulse_ns": null,
+            "video": null
+          },
+          {
+            "clip": "late_combos_and_source_end",
+            "initial_distance_m": 0.65,
+            "state": "rejected_initial_overlap",
+            "initial_interrobot_contact_distances_m": [
+              -0.0007731083583754242
+            ],
+            "completed": false,
+            "seconds": null,
+            "end_reason": "rejected_initial_overlap",
+            "fallen_per_role": null,
+            "source_legal_20ms_peak_ns": null,
+            "source_legal_20ms_peak_ns_by_hand": {},
+            "source_unscored_20ms_peak_ns": null,
+            "source_unscored_20ms_peak_ns_by_hand": {},
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": null,
+            "positive_separation_normal_impulse_ns": null,
+            "video": null
+          },
+          {
+            "clip": "late_combos_and_source_end",
+            "initial_distance_m": 0.7,
+            "state": "completed",
+            "initial_interrobot_contact_distances_m": [],
+            "completed": true,
+            "seconds": 8.11999999999987,
+            "end_reason": "source_end",
+            "fallen_per_role": [
+              false,
+              false
+            ],
+            "source_legal_20ms_peak_ns": 0.0,
+            "source_legal_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_unscored_20ms_peak_ns": 0.0,
+            "source_unscored_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": false,
+            "positive_separation_normal_impulse_ns": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "video": "impact/02-late_combos_and_source_end-d0.700/motion.mp4"
+          },
+          {
+            "clip": "late_combos_and_source_end",
+            "initial_distance_m": 0.775,
+            "state": "completed",
+            "initial_interrobot_contact_distances_m": [],
+            "completed": true,
+            "seconds": 8.11999999999987,
+            "end_reason": "source_end",
+            "fallen_per_role": [
+              false,
+              false
+            ],
+            "source_legal_20ms_peak_ns": 0.0,
+            "source_legal_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_unscored_20ms_peak_ns": 0.0,
+            "source_unscored_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": false,
+            "positive_separation_normal_impulse_ns": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "video": "impact/02-late_combos_and_source_end-d0.775/motion.mp4"
+          },
+          {
+            "clip": "late_combos_and_source_end",
+            "initial_distance_m": 0.85,
+            "state": "completed",
+            "initial_interrobot_contact_distances_m": [],
+            "completed": true,
+            "seconds": 8.11999999999987,
+            "end_reason": "source_end",
+            "fallen_per_role": [
+              false,
+              false
+            ],
+            "source_legal_20ms_peak_ns": 0.0,
+            "source_legal_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_unscored_20ms_peak_ns": 0.0,
+            "source_unscored_20ms_peak_ns_by_hand": {
+              "left": 0.0,
+              "right": 0.0
+            },
+            "source_legal_contact_episodes": 0,
+            "largest_legal_episode": null,
+            "necessary_5ns_window_threshold_reached": false,
+            "positive_separation_normal_impulse_ns": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0
+              ]
+            ],
+            "video": "impact/02-late_combos_and_source_end-d0.850/motion.mp4"
+          }
+        ],
+        "strongest_legal_episode_in_this_test": null
+      }
+    ],
+    "limitations": [
+      "Maxima cover only these clips, distances and opponent pose; not a global maximum or real-robot measurement.",
+      "A contact episode is not automatically one punch; episodes longer than 200ms are sustained contact.",
+      "Source-only 20ms peaks are used; official rolling-window carryover from entry is not included.",
+      "Threshold crossing is not an official hit count; referee cooldown, consumed windows and match conditions are not reconstructed.",
+      "The source ends with arms open near a T pose; this is not a boxing guard recovery."
+    ]
+  },
+  "excluded_navigation_training": {
+    "completed_cases": 17,
+    "successes": 0,
+    "implementation_included": false
+  }
+}

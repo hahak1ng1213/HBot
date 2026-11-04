@@ -121,3 +121,9 @@ MUJOCO_LOG.TXT
 /.validation-cleanup-tmp/
 /validation-cleanup-tests.log
 /github-upload.patch
+
+# Local collaboration check environments and private experiment outputs.
+/.venv-checks/
+/.check-tmp/
+/.env
+/.env.local

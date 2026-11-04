@@ -1,0 +1,308 @@
+{
+  "format": "combo45_other_combos_selection_v1",
+  "source_path": "boxing_20251226/kangning-045.npz",
+  "source_sha256": "cb902b674f54caed1a4745a9b6f46c198592cff181bddb6e3c037adce2cf4267",
+  "fps": 50,
+  "bounds_are_end_exclusive": true,
+  "selection_measurements": "Original stored body poses/velocities; current-model FK and physical tracking are separate checks",
+  "events_warning": "Kinematic wrist-speed candidates include outgoing and returning motions, not verified punches or hits",
+  "target_heading_rule": "Use only each section's first two candidate events; target remains stationary in world reference thereafter",
+  "segments_overlap": true,
+  "speed_scale": 1.0,
+  "source_modified": false,
+  "tail_warning": "After approximately 27.7s the source turns and opens its arms; 28.5-29.5s is near-T ending, not boxing guard",
+  "segments": [
+    {
+      "name": "moving_combos_0660_1546",
+      "source_bounds": [
+        330,
+        773
+      ],
+      "time_bounds_s": [
+        6.6,
+        15.46
+      ],
+      "duration_s": 8.86,
+      "events": [
+        [
+          "right",
+          374
+        ],
+        [
+          "left",
+          389
+        ],
+        [
+          "right",
+          463
+        ],
+        [
+          "left",
+          477
+        ],
+        [
+          "left",
+          520
+        ],
+        [
+          "right",
+          533
+        ],
+        [
+          "left",
+          547
+        ],
+        [
+          "right",
+          611
+        ],
+        [
+          "left",
+          624
+        ],
+        [
+          "right",
+          640
+        ],
+        [
+          "right",
+          685
+        ],
+        [
+          "left",
+          699
+        ],
+        [
+          "right",
+          742
+        ],
+        [
+          "left",
+          767
+        ]
+      ],
+      "aim_events": [
+        [
+          "right",
+          374
+        ],
+        [
+          "left",
+          389
+        ]
+      ],
+      "description": "Moving and turning combinations, including the untested 7.48/7.78s pair and the 10-15s sequences",
+      "entry_source_state": {
+        "source_frame": 330,
+        "source_time_s": 6.6,
+        "root_xy_speed_mps": 0.2724159249771675,
+        "root_angular_speed_rad_s": 2.567932605743408,
+        "wrist_torso_relative_speed_mps_left_right": [
+          0.45767476244461686,
+          0.8663717068929373
+        ]
+      },
+      "last_source_state": {
+        "source_frame": 772,
+        "source_time_s": 15.44,
+        "root_xy_speed_mps": 0.4042590459134359,
+        "root_angular_speed_rad_s": 0.8654971122741699,
+        "wrist_torso_relative_speed_mps_left_right": [
+          0.4456171009508788,
+          0.3254168396914222
+        ]
+      },
+      "endpoint_stationarity_verified": false,
+      "natural_guard_recovery_claim": false,
+      "additional_endpoint_hold_steps": 0,
+      "initial_distances_m": [
+        0.5,
+        0.575,
+        0.65
+      ]
+    },
+    {
+      "name": "turning_combos_1420_2274",
+      "source_bounds": [
+        710,
+        1137
+      ],
+      "time_bounds_s": [
+        14.2,
+        22.74
+      ],
+      "duration_s": 8.54,
+      "events": [
+        [
+          "right",
+          742
+        ],
+        [
+          "left",
+          767
+        ],
+        [
+          "right",
+          811
+        ],
+        [
+          "left",
+          834
+        ],
+        [
+          "right",
+          849
+        ],
+        [
+          "right",
+          898
+        ],
+        [
+          "left",
+          912
+        ],
+        [
+          "right",
+          978
+        ],
+        [
+          "right",
+          1009
+        ],
+        [
+          "left",
+          1054
+        ],
+        [
+          "left",
+          1081
+        ]
+      ],
+      "aim_events": [
+        [
+          "right",
+          742
+        ],
+        [
+          "left",
+          767
+        ]
+      ],
+      "description": "Continuous turning, footwork and alternating hand motions across the middle-late sequence",
+      "entry_source_state": {
+        "source_frame": 710,
+        "source_time_s": 14.2,
+        "root_xy_speed_mps": 0.2948536011621808,
+        "root_angular_speed_rad_s": 2.086297035217285,
+        "wrist_torso_relative_speed_mps_left_right": [
+          0.9707356871532014,
+          0.37319224884959534
+        ]
+      },
+      "last_source_state": {
+        "source_frame": 1136,
+        "source_time_s": 22.72,
+        "root_xy_speed_mps": 0.06906939550133244,
+        "root_angular_speed_rad_s": 0.6387669444084167,
+        "wrist_torso_relative_speed_mps_left_right": [
+          0.5969970303642733,
+          0.6286265580820203
+        ]
+      },
+      "endpoint_stationarity_verified": false,
+      "natural_guard_recovery_claim": false,
+      "additional_endpoint_hold_steps": 0,
+      "initial_distances_m": [
+        0.5,
+        0.575,
+        0.65,
+        0.7,
+        0.775
+      ]
+    },
+    {
+      "name": "late_combos_and_source_end",
+      "source_bounds": [
+        1088,
+        1475
+      ],
+      "time_bounds_s": [
+        21.76,
+        29.5
+      ],
+      "duration_s": 7.74,
+      "events": [
+        [
+          "right",
+          1153
+        ],
+        [
+          "left",
+          1169
+        ],
+        [
+          "left",
+          1214
+        ],
+        [
+          "right",
+          1228
+        ],
+        [
+          "right",
+          1302
+        ],
+        [
+          "left",
+          1316
+        ],
+        [
+          "right",
+          1336
+        ]
+      ],
+      "aim_events": [
+        [
+          "right",
+          1153
+        ],
+        [
+          "left",
+          1169
+        ]
+      ],
+      "description": "Late combinations, then the original end transition into an arms-open near-T pose; not a boxing guard recovery",
+      "entry_source_state": {
+        "source_frame": 1088,
+        "source_time_s": 21.76,
+        "root_xy_speed_mps": 0.18118294476290028,
+        "root_angular_speed_rad_s": 0.7394000887870789,
+        "wrist_torso_relative_speed_mps_left_right": [
+          1.339971880834559,
+          0.17425649785830935
+        ]
+      },
+      "last_source_state": {
+        "source_frame": 1474,
+        "source_time_s": 29.48,
+        "root_xy_speed_mps": 0.02857867766709924,
+        "root_angular_speed_rad_s": 0.11342670023441315,
+        "wrist_torso_relative_speed_mps_left_right": [
+          0.018865052220959574,
+          0.021622370726912126
+        ]
+      },
+      "endpoint_stationarity_verified": false,
+      "natural_guard_recovery_claim": false,
+      "additional_endpoint_hold_steps": 0,
+      "initial_distances_m": [
+        0.5,
+        0.575,
+        0.65,
+        0.7,
+        0.775,
+        0.85
+      ]
+    }
+  ]
+}

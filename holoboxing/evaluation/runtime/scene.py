@@ -1,14 +1,18 @@
 """The shared two-fighter arena; every physical step executes on the GPU."""
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
-import time
 
 import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from .onnx_device import require_gpu
+from holoboxing.evaluation.runtime.contact_geometry import (
+    opponent_target_semantic,
+    strike_geometry,
+)
+from holoboxing.evaluation.runtime.onnx_device import require_gpu
 
 
 @dataclass(frozen=True)
@@ -179,30 +183,20 @@ class BoxingMatchScene:
             raise ValueError("Both fighters must use the same torque limits")
         self._torque_limit = limits[0]
         self._targets = np.zeros((2, 29), dtype=np.float64)
-        aliases = {
-            "left_wrist_yaw_link": "left_hand",
-            "right_wrist_yaw_link": "right_hand",
-            "left_rubber_hand": "left_hand",
-            "right_rubber_hand": "right_hand",
-            "left_ankle_roll_link": "left_foot",
-            "right_ankle_roll_link": "right_foot",
-        }
         for geom in range(self.model.ngeom):
-            body = (
-                self.model.body(int(self.model.geom_bodyid[geom])).name or ""
-            )
-            for fighter, prefix in enumerate(("p1_", "p2_")):
-                if body.startswith(prefix) and body[len(prefix) :] in aliases:
-                    self._strike_geom[geom] = (
-                        fighter,
-                        aliases[body[len(prefix) :]],
-                    )
+            resolved = strike_geometry(self.model, geom)
+            if resolved is not None:
+                self._strike_geom[geom] = resolved
         if inference_benchmark:
-            from .benchmark_state import BenchmarkState
+            from holoboxing.evaluation.runtime.benchmark_state import (
+                BenchmarkState,
+            )
 
             self._gpu_physics = BenchmarkState(self, physics_device)
         else:
-            from .gpu_physics import ResidentPhysics
+            from holoboxing.evaluation.runtime.gpu_physics import (
+                ResidentPhysics,
+            )
 
             self._gpu_physics = ResidentPhysics(self, physics_device)
         self._started = time.monotonic()
@@ -212,34 +206,7 @@ class BoxingMatchScene:
         return True
 
     def _opponent_target_semantic(self, attacker, geom):
-        body_id = int(self.model.geom_bodyid[geom])
-        body = self.model.body(body_id).name or ""
-        prefix = ("p1_", "p2_")[1 - attacker]
-        if not body.startswith(prefix):
-            return None
-        link = body[len(prefix) :]
-        semantic = {
-            "torso_link": "torso",
-            "pelvis": "pelvis",
-            "head_link": "head",
-            "logo_link": "chest",
-        }.get(link, "unscored")
-        mesh_id = (
-            int(self.model.geom_dataid[geom])
-            if self.model.geom_type[geom] == mujoco.mjtGeom.mjGEOM_MESH
-            else -1
-        )
-        mesh_name = self.model.mesh(mesh_id).name if mesh_id >= 0 else ""
-        # Attached models prefix mesh names as well as body names.
-        if mesh_name.startswith(prefix):
-            mesh_name = mesh_name[len(prefix) :]
-        semantic = {
-            "head_link": "head",
-            "logo_link": "chest",
-            "pelvis_contour_link": "pelvis",
-            "pelvis_contour_collision": "pelvis",
-        }.get(mesh_name, semantic)
-        return body_id, link, semantic
+        return opponent_target_semantic(self.model, attacker, geom)
 
     def write_pair_state(self, qpos, qvel=None):
         values = np.asarray(qpos, dtype=np.float64)
@@ -336,7 +303,7 @@ class BoxingMatchScene:
         world = np.stack(
             [
                 _quat_to_matrix_wxyz(q) @ value
-                for q, value in zip(quat[0], angular[0])
+                for q, value in zip(quat[0], angular[0], strict=False)
             ]
         ).astype(np.float32)[None]
         joint = data.qpos[np.asarray(self._joint_qpos)].astype(np.float32)[

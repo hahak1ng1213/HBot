@@ -1,0 +1,7 @@
+{
+  "holoboxing/training/skills/actor.py": "30f7fd38a5d0b958424252a045f991881ce1fb7b5ca049c326413244ce602ba5",
+  "holoboxing/training/skills/train.py": "287e2c02247c20e6c8271121adaeeddab8b69f3c38bc3faaa5e5c2fd2fdae502",
+  "holoboxing/training/skills/env.py": "0ed39cdf97f86f57d2c2336ba2f550a25735125161243e9f695002ec9f39b6d6",
+  "holoboxing/training/skills/physics.py": "de43a2375c05489d75f10f3b125a6421c110825d447d96834903364e6c835340",
+  "holoboxing/training/skills/reference.py": "5fdc9813ea233a7083b477988eebc44b4e1dcfb302e1a980effd14f97df992d6"
+}

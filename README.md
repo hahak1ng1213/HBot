@@ -1,3 +1,5 @@
+> **HBot collaboration baseline (2026-11-04):** [当前拳击进展与复现说明](docs/boxing_validated_baseline.zh-CN.md) · [协作约定](CONTRIBUTING.md). The validated progress is partial simulation behavior, not a completed competition policy.
+
 <div align="center">
 
 <img src="assets/media/holomotion_logo_text.jpg" alt="HoloMotion Logo" width="600"/>
