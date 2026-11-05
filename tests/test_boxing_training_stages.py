@@ -53,11 +53,21 @@ def small_policy():
     return config, SphericalActorCritic(actor, config)
 
 
-def test_standing_world_targets_ignore_motion_until_individual_reset():
+@pytest.mark.parametrize("guard", [False, True])
+def test_standing_world_targets_ignore_motion_until_individual_reset(guard):
     neutral = torch.zeros(5, 5, 9)
     neutral[..., 3] = neutral[..., 8] = 1
     neutral[..., 2] = torch.arange(5) / 10
-    hold = WorldStandingReference(neutral.flatten(), 2, "cpu")
+    wrists = torch.tensor([[0.18, 0.12, 0.34], [0.18, -0.12, 0.34]])
+    hold = WorldStandingReference(
+        neutral.flatten(),
+        2,
+        "cpu",
+        wrist_position=wrists if guard else None,
+        wrist_quaternion=torch.tensor([[1.0, 0, 0, 0], [1.0, 0, 0, 0]])
+        if guard
+        else None,
+    )
     measured = {
         "position": torch.zeros(4, 5, 3),
         "quaternion": torch.zeros(4, 5, 4),
@@ -79,6 +89,20 @@ def test_standing_world_targets_ignore_motion_until_individual_reset():
     first = [value.clone() for value in hold.apply(measured, *first_inputs)]
     for actual, expected in zip(first, active, strict=True):
         torch.testing.assert_close(actual[::2], expected)
+    if guard:
+        from holomotion.src.utils.torch_utils import matrix_from_quat
+
+        p, q = first[:2]
+        rotation = matrix_from_quat(q[1::2])
+        local = torch.einsum(
+            "ntij,ntbj->ntbi",
+            rotation[:, :, 0].transpose(-1, -2),
+            p[1::2, :, 1:3] - p[1::2, :, :1],
+        )
+        torch.testing.assert_close(local, wrists.expand(2, 5, -1, -1))
+        torch.testing.assert_close(
+            rotation[:, :, 1:3], rotation[:, :, :1].expand(-1, -1, 2, -1, -1)
+        )
     measured["position"] += 2
     measured["quaternion"][..., 0] = 0
     measured["quaternion"][..., 3] = 1

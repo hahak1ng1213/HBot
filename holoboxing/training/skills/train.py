@@ -1,6 +1,7 @@
 """Standalone frozen-lower skill PPO, independent of combat objectives."""
 
 import argparse
+import copy
 import json
 import math
 import random
@@ -155,6 +156,8 @@ def checkpoint(env, model, optimizer, update, args):
         "environment_rng_state": env.rng.get_state(),
         "is_competition_submission": False,
         "simulator_continuity_saved": False,
+        "initialization": getattr(env, "initialization", None),
+        "curriculum_state": getattr(env, "curriculum_state", lambda: None)(),
         "implementation_sources": getattr(env, "implementation_sources", None)
         or implementation_identity(),
     }
@@ -164,6 +167,37 @@ def save_model(path, value):
     temporary = path.with_suffix(".tmp")
     torch.save(value, temporary)
     temporary.replace(path)
+
+
+def bounded_optimizer_step(
+    model, optimizer, observations, old_mean, old_std, target_kl
+):
+    """Reject a minibatch update that exceeds the full-rollout Gaussian KL.
+
+    Restore Adam moments as well as weights, then reduce the next step size.
+    This is opt-in for task environments declaring ppo_target_kl.
+    """
+    model_before = {
+        key: value.detach().clone()
+        for key, value in model.state_dict().items()
+    }
+    optimizer_before = copy.deepcopy(optimizer.state_dict())
+    optimizer.step()
+    with torch.no_grad():
+        divergence = float("inf")
+        if all(torch.isfinite(p).all() for p in model.parameters()):
+            current = model.distribution(observations)
+            old = torch.distributions.Normal(old_mean, old_std)
+            divergence = float(
+                torch.distributions.kl_divergence(old, current).sum(-1).mean()
+            )
+    accepted = math.isfinite(divergence) and divergence <= target_kl
+    if not accepted:
+        model.load_state_dict(model_before)
+        optimizer.load_state_dict(optimizer_before)
+        for group in optimizer.param_groups:
+            group["lr"] = max(1e-6, group["lr"] * 0.5)
+    return accepted, divergence
 
 
 def validate_training_arguments(args):
@@ -196,6 +230,9 @@ def train_teacher(env, output, args):
 
 def _train_teacher(env, output, args):
     model = SkillActor(env.observation_dim).to(env.device)
+    initial = getattr(env, "initial_model_state", None)
+    if initial is not None:
+        model.load_state_dict(initial, strict=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     write_json(
         output / "recipe.json",
@@ -206,7 +243,9 @@ def _train_teacher(env, output, args):
             "updates": args.updates,
             "num_envs": env.num_envs,
             "rollout_steps": args.rollout_steps,
-            "fresh_residual_policy": True,
+            "fresh_residual_policy": initial is None,
+            "initialization": getattr(env, "initialization", None),
+            "fresh_optimizer": True,
         },
     )
     start = time.monotonic()
@@ -283,6 +322,14 @@ def _train_teacher(env, output, args):
             old_logp = batch["logp"].flatten()
             old_value = batch["value"].flatten()
             kl = 0.0
+            target_kl = getattr(env, "ppo_target_kl", None)
+            if target_kl is not None:
+                with torch.no_grad():
+                    old_distribution = model.distribution(observations)
+                    old_mean = old_distribution.mean.detach().clone()
+                    old_std = old_distribution.stddev.detach().clone()
+            rejected = False
+            rejected_kl = 0.0
             epochs_done = 0
             for epoch in range(4):
                 order = torch.randperm(len(adv), device=env.device)
@@ -313,15 +360,37 @@ def _train_teacher(env, output, args):
                     torch.nn.utils.clip_grad_norm_(
                         model.parameters(), 1.0, error_if_nonfinite=True
                     )
-                    optimizer.step()
+                    if target_kl is None:
+                        optimizer.step()
+                    else:
+                        accepted, proposed_kl = bounded_optimizer_step(
+                            model,
+                            optimizer,
+                            observations,
+                            old_mean,
+                            old_std,
+                            target_kl,
+                        )
+                        if not accepted:
+                            rejected = True
+                            rejected_kl = (
+                                proposed_kl
+                                if math.isfinite(proposed_kl)
+                                else -1.0
+                            )
+                            break
+                        kl = proposed_kl
                 with torch.no_grad():
-                    current_logp, _, _ = model.evaluate(observations, actions)
-                    difference = current_logp - old_logp
-                    kl = float((difference.exp() - 1 - difference).mean())
+                    if target_kl is None:
+                        current_logp, _, _ = model.evaluate(
+                            observations, actions
+                        )
+                        difference = current_logp - old_logp
+                        kl = float((difference.exp() - 1 - difference).mean())
                     if not math.isfinite(kl):
                         raise RuntimeError("Nonfinite PPO divergence")
                 epochs_done = epoch + 1
-                if kl > 0.03:
+                if rejected or kl > 0.03:
                     break
             last_metrics = {
                 "update": update,
@@ -332,10 +401,18 @@ def _train_teacher(env, output, args):
                     k: v / args.rollout_steps for k, v in metric_sum.items()
                 },
                 "ppo_kl": kl,
+                "ppo_rejected_update": int(rejected),
+                "ppo_rejected_kl": rejected_kl,
+                "learning_rate": optimizer.param_groups[0]["lr"],
                 "optimization_epochs": epochs_done,
                 "update_wall_seconds": time.monotonic() - update_start,
                 "wall_seconds": time.monotonic() - start,
             }
+            if hasattr(env, "advance_curriculum"):
+                last_metrics["curriculum"] = env.advance_curriculum(
+                    update, last_metrics["tracking"]
+                )
+                observation = env.get_observations()
             stream.write(json.dumps(last_metrics, allow_nan=False) + "\n")
             stream.flush()
             print(json.dumps(last_metrics), flush=True)

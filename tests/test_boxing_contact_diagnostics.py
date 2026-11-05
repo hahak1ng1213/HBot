@@ -59,6 +59,8 @@ def test_multiple_contact_points_count_one_hand_sample_and_hit():
     assert delta.tolist() == [[1, 0]]
     metrics = ref.contact_metrics()
     assert metrics["official_legal_contact_samples"].tolist() == [[4, 0]]
+    assert metrics["official_left_hits"].tolist() == [[1, 0]]
+    assert metrics["official_right_hits"].tolist() == [[0, 0]]
     assert metrics["official_subthreshold_contact_samples"].tolist() == [
         [3, 0]
     ]
@@ -105,6 +107,8 @@ def test_both_fighters_hands_worlds_and_reset_are_independent():
     )
     assert delta.tolist() == [[2, 0], [0, 1]]
     metrics = ref.contact_metrics()
+    assert metrics["official_left_hits"].tolist() == [[1, 0], [0, 1]]
+    assert metrics["official_right_hits"].tolist() == [[1, 0], [0, 0]]
     assert metrics["official_legal_contact_samples"].tolist() == [
         [8, 0],
         [0, 4],
@@ -134,3 +138,33 @@ def test_illegal_and_nonphysical_contacts_are_not_legal_contact_samples():
     )
     assert all(not value.any() for value in ref.contact_metrics().values())
     assert ref.matches[0].score.tolist() == [0, 0]
+
+
+def test_torso_contact_includes_light_touch_but_excludes_head_and_illegal():
+    ref = OfficialReferees(2)
+    _, delta = frame(
+        ref,
+        [
+            [
+                contact(force=0.1, target_body="torso_link"),
+                contact(force=0.1, target_body="torso_link", pair_id=1),
+                contact(force=0.1, hand="right", target_body="head"),
+                contact(force=0.1, target_body="torso_link", actor=1),
+            ],
+            [
+                contact(target_body="head"),
+                contact(
+                    target_body="torso_link",
+                    attacking_body="left_ankle_roll_link",
+                ),
+                contact(target_body="torso_link", physical_contact=False),
+                contact(target_body="right_elbow_link"),
+            ],
+        ],
+    )
+    assert not delta[0].any()
+    assert ref.contact_metrics()[
+        "official_torso_contact_samples"
+    ].tolist() == [[4, 4], [0, 0]]
+    frame(ref, [[], []])
+    assert not ref.contact_metrics()["official_torso_contact_samples"].any()

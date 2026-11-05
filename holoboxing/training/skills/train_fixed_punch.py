@@ -1,4 +1,4 @@
-"""Train/evaluate kangning037 at 1.5x with a strict 0.6 m attack gate.
+"""Train/evaluate kangning037 at 1.5x with a 0.65/1.5 m distance latch.
 
 This entry uses the competition CPU physics and official referee, with a
 passive world-anchored opponent. Checkpoints are task teachers, not submissions.
@@ -17,6 +17,7 @@ from holoboxing.training.skills.actor import SkillActor
 from holoboxing.training.skills.fixed_punch import (
     FixedPunchCombatEnv,
     FixedPunchConfig,
+    guard_pose,
 )
 from holoboxing.training.skills.train import (
     record_failure,
@@ -56,18 +57,29 @@ def parse_arguments(argv=None):
         "--mode", choices=("train", "baseline", "evaluate"), default="train"
     )
     parser.add_argument("--checkpoint", type=existing_path)
+    parser.add_argument("--init-checkpoint", type=existing_path)
+    parser.add_argument("--init-source-root", type=existing_path)
     parser.add_argument("--opponent-onnx", type=existing_path)
+    parser.add_argument(
+        "--standing-guard",
+        action="store_true",
+        help="Passive world-standing blue with compact guard wrists",
+    )
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--num-envs", type=int, default=8)
     parser.add_argument("--updates", type=int, default=256)
     parser.add_argument("--rollout-steps", type=int, default=32)
     parser.add_argument("--save-every", type=int, default=64)
-    parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--seed", type=int, default=37)
     parser.add_argument("--eval-steps", type=int, default=3000)
     parser.add_argument("--guard-offset-deg", type=float, default=0.0)
     parser.add_argument("--physics-threads", type=int, default=1)
     args = parser.parse_args(argv)
+    if args.standing_guard and args.opponent_onnx is not None:
+        parser.error(
+            "--standing-guard requires a passive opponent, not --opponent-onnx"
+        )
     try:
         validate_training_arguments(args)
         FixedPunchConfig(
@@ -86,8 +98,63 @@ def parse_arguments(argv=None):
         parser.error("Associated .runtime directory must also be new")
     if (args.mode == "evaluate") != (args.checkpoint is not None):
         parser.error("Only evaluate requires --checkpoint")
+    if (args.init_checkpoint is None) != (args.init_source_root is None):
+        parser.error(
+            "Fine-tuning requires both --init-checkpoint and --init-source-root"
+        )
+    if args.init_checkpoint is not None and args.mode != "train":
+        parser.error("--init-checkpoint is only valid for training")
     args.skill = "kangning037_combat"
     return args
+
+
+def initialize_teacher(env, checkpoint, source_root):
+    """Explicit v5 -> v6 weights-only migration; never pretend to resume Adam."""
+    saved = torch.load(checkpoint, map_location=env.device, weights_only=False)
+    if saved.get("format") != "kangning037_range_teacher_v5":
+        raise ValueError("Reach fine-tuning requires the verified v5 teacher")
+    for key, expected in (
+        ("observation_dim", env.observation_dim),
+        ("action_dim", 30),
+        ("hidden_dims", (256, 128)),
+        ("reference_manifest", env.library.manifest),
+    ):
+        if saved.get(key) != expected:
+            raise ValueError(f"Initialization contract differs: {key}")
+    sources = saved.get("implementation_sources")
+    if not isinstance(sources, dict) or not sources:
+        raise ValueError("Initialization lacks source provenance")
+    root = (Path(source_root) / "holoboxing").resolve()
+    for relative, digest in sources.items():
+        path = (root / relative).resolve()
+        if not path.is_relative_to(root) or not path.is_file():
+            raise ValueError(f"Missing initialization source: {relative}")
+        if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            raise ValueError(f"Initialization source hash differs: {relative}")
+    previous = saved["environment_recipe"]
+    # All prior reference, gate, motion, opponent and resource contracts must
+    # match. v6 changes only the documented reach reward/action allowance.
+    for key, value in previous.items():
+        if key in ("version", "reward"):
+            continue
+        if env.recipe.get(key) != value:
+            raise ValueError(f"Initialization environment differs: {key}")
+    model = SkillActor(env.observation_dim).to(env.device)
+    model.load_state_dict(saved["model"], strict=True)
+    if any(not torch.isfinite(v).all() for v in model.state_dict().values()):
+        raise ValueError("Nonfinite initialization weights")
+    env.initial_model_state = model.state_dict()
+    env.initialization = {
+        "kind": "v5_to_v6_reach_weights_only",
+        "checkpoint": str(checkpoint),
+        "sha256": hashlib.sha256(Path(checkpoint).read_bytes()).hexdigest(),
+        "source_root": str(source_root),
+        "source_format": saved["format"],
+        "source_update": saved["update"],
+        "optimizer": "fresh Adam; explicit new learning rate",
+        "source_closure_verified": True,
+        "action_migration": "same 30 residual axes; positive wrist-forward allowance 0.06 -> 0.18 m",
+    }
 
 
 class FrozenOpponent:
@@ -135,7 +202,9 @@ class FrozenOpponent:
         return torch.as_tensor(output, device=observation.device)
 
 
-def build_environment(args):
+def build_environment(
+    args, *, env_class=FixedPunchCombatEnv, opponent_override=None
+):
     # These imports require the standalone boxing runtime, not Isaac Lab.
     from holoboxing.data.contract import CompetitionAssets
     from holoboxing.training.envs.mujoco_env import MujocoSandbagEnv
@@ -180,11 +249,24 @@ def build_environment(args):
             locomotion_mode="forward",
             device=args.device,
         )
-    opponent = (
+    opponent = opponent_override or (
         FrozenOpponent(args.opponent_onnx) if args.opponent_onnx else None
     )
+    standing_guard = (
+        guard_pose(punch.clips[0]) if args.standing_guard else None
+    )
     standing = (
-        WorldStandingReference(neutral, args.num_envs, args.device)
+        WorldStandingReference(
+            neutral,
+            args.num_envs,
+            args.device,
+            wrist_position=None
+            if standing_guard is None
+            else standing_guard[0],
+            wrist_quaternion=None
+            if standing_guard is None
+            else standing_guard[1],
+        )
         if opponent is None
         else None
     )
@@ -201,7 +283,7 @@ def build_environment(args):
         physics_threads=args.physics_threads,
     )
     try:
-        env = FixedPunchCombatEnv(
+        env = env_class(
             combat,
             punch,
             movement,
@@ -216,6 +298,14 @@ def build_environment(args):
         env.recipe["opponent"] = (
             opponent.identity if opponent is not None else "world_standing"
         )
+        if standing_guard is not None:
+            env.recipe["opponent"] = {
+                "kind": "world_standing_guard",
+                "pelvis_local_wrists": standing_guard[0].tolist(),
+                "pelvis_local_wrist_quaternions": standing_guard[1].tolist(),
+                "orientation_source_frame": standing_guard[2],
+                "contact_response": "dynamic; fixed world targets, no attack policy",
+            }
         return env
     except BaseException:
         combat.close()
@@ -312,6 +402,10 @@ def main(argv=None):
     env = None
     try:
         env = build_environment(args)
+        if args.init_checkpoint is not None:
+            initialize_teacher(
+                env, args.init_checkpoint, args.init_source_root
+            )
         result = (
             train_teacher(env, args.output, args)
             if args.mode == "train"

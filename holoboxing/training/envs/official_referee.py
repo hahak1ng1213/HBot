@@ -61,6 +61,9 @@ class OfficialReferees:
             name: np.zeros((len(self.matches), 2), dtype=np.float64)
             for name in (
                 "official_legal_contact_samples",
+                "official_torso_contact_samples",
+                "official_left_hits",
+                "official_right_hits",
                 "official_subthreshold_contact_samples",
                 "official_cooldown_contact_samples",
                 "official_contact_impulse_max_ns",
@@ -73,12 +76,17 @@ class OfficialReferees:
                     continue
                 key = (row["actor"], row["hand"], row["physics_time_s"])
                 samples.setdefault(key, []).append(row)
-            for (actor, _, _), rows in samples.items():
+            for (actor, hand, _), rows in samples.items():
                 metrics["official_legal_contact_samples"][world, actor] += 1
+                if any(row["body_part"] == "torso" for row in rows):
+                    metrics["official_torso_contact_samples"][
+                        world, actor
+                    ] += 1
                 impulse = max(row["normal_impulse_ns"] for row in rows)
                 peak = metrics["official_contact_impulse_max_ns"]
                 peak[world, actor] = max(peak[world, actor], impulse)
                 if any(row["valid"] for row in rows):
+                    metrics[f"official_{hand}_hits"][world, actor] += 1
                     continue
                 reason = rows[0]["reason"]
                 if reason == "impulse_below_threshold":

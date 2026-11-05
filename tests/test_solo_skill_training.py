@@ -12,6 +12,39 @@ from holoboxing.training.skills import train
 from holoboxing.training.skills.actor import SkillActor, load_teacher
 
 
+def test_bounded_update_accepts_small_step_and_restores_adam_on_excess():
+    import copy
+
+    torch.manual_seed(9)
+    model = SkillActor(4, hidden_dims=(8, 8))
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5)
+    observations = torch.randn(16, 4)
+    old = model.distribution(observations)
+    mean, std = old.mean.detach().clone(), old.stddev.detach().clone()
+    for parameter in model.parameters():
+        parameter.grad = torch.ones_like(parameter)
+    accepted, kl = train.bounded_optimizer_step(
+        model, optimizer, observations, mean, std, 0.03
+    )
+    assert accepted and 0 < kl <= 0.03
+    optimizer.param_groups[0]["lr"] = 1.0
+    before_model = copy.deepcopy(model.state_dict())
+    before_optimizer = copy.deepcopy(optimizer.state_dict())
+    accepted, kl = train.bounded_optimizer_step(
+        model, optimizer, observations, mean, std, 0.03
+    )
+    assert not accepted and kl > 0.03
+    for key, value in model.state_dict().items():
+        torch.testing.assert_close(value, before_model[key], rtol=0, atol=0)
+    restored = optimizer.state_dict()
+    for key, values in before_optimizer["state"].items():
+        for name, value in values.items():
+            torch.testing.assert_close(
+                restored["state"][key][name], value, rtol=0, atol=0
+            )
+    assert optimizer.param_groups[0]["lr"] == 0.5
+
+
 class FakeEnv:
     num_envs = 2
     device = torch.device("cpu")

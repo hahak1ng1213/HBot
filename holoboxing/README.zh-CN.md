@@ -6,7 +6,9 @@
 
 出现“训练完成但没有命中得分”时，先阅读 [进攻奖励修复与行为验收](../docs/boxing_score_recovery.zh-CN.md)。其中说明本版本修复、接触诊断指标、旧权重重新训练和模仿初始化的区别。
 
-固定拳法实验见 [kangning-037：1.5 倍速拳法与 0.6 m 距离门控](../docs/boxing_kangning037.zh-CN.md)，包含新训练入口、奖励公式及当前验证范围。
+固定拳法实验见 [kangning-037：1.5 倍速拳法与 0.65/1.5 m 距离门控](../docs/boxing_kangning037.zh-CN.md)，包含新训练入口、奖励公式及当前验证范围。
+
+第一组的 [v7 自主拳法与完整周期提速](../docs/boxing_kangning037.zh-CN.md#7-v7-自主拳法与完整周期提速2026-11-05) 使用冻结的 9536 轮策略作为动作基础和蓝方，按有效命中后收拳的表现逐级提高速度与频率，并允许小幅降低骨盆目标。
 
 <p align="center">
   <img src="../assets/media/holoboxing_highlights.webp" alt="仿真集锦：HoloBoxing长版本（21.4分钟）对阵RoboStriker" width="480">

@@ -70,6 +70,13 @@ def env(monkeypatch, tmp_path, request):
         capture_transition_state=True,
         standing_reference=WorldStandingReference(torch.zeros(225), 2, "cpu"),
     )
+    # The base CPU fixture enables only the left glove. Reach supervision
+    # intentionally requires both real collision pairs instead of a fallback.
+    for model in (combat.physics.host, *combat.physics.models):
+        wrist = model.body("p1_right_wrist_yaw_link").id
+        geoms = model.geom_bodyid == wrist
+        model.geom_contype[geoms] = 1
+        model.geom_conaffinity[geoms] = 1
     result = task.FixedPunchCombatEnv(
         combat, library(), library(movement=True)
     )
@@ -92,19 +99,22 @@ def place(env, distance, angle=0.0):
     env.age[:] = env.config.transition_steps
 
 
-def test_front_gate_has_no_attack_above_user_limit():
+def test_distance_latch_strict_entry_and_strict_exit():
     cfg = task.FixedPunchConfig()
-    d = torch.tensor([0.58, 0.59, 0.60, 0.600001, 0.55, 0.55, float("nan")])
-    a = torch.tensor([0, 0, 0, 0, math.radians(20), math.radians(26), 0])
+    d = torch.tensor(
+        [0.6499, 0.65, 0.6501, 1.4999, 1.5, 1.5001, float("nan")],
+        dtype=torch.float64,
+    )
+    a = torch.zeros_like(d)
     assert task.attack_gate(
         torch.zeros(7, dtype=torch.bool), d, a, cfg
-    ).tolist() == [True, True, True, False, True, True, False]
+    ).tolist() == [True, False, False, False, False, False, False]
     assert task.attack_gate(
         torch.ones(7, dtype=torch.bool), d, a, cfg
-    ).tolist() == [True, True, True, False, True, True, False]
+    ).tolist() == [True, True, True, True, True, False, False]
 
 
-def test_front_gate_excludes_sideways_and_behind():
+def test_heading_never_clears_latch_but_punch_requires_front():
     angles = torch.deg2rad(
         torch.tensor(
             [0.0, 45.0, 89.9, 90.0, 90.1, 180.0, -89.9, -90.0, float("nan")]
@@ -117,17 +127,18 @@ def test_front_gate_excludes_sideways_and_behind():
             angles,
             task.FixedPunchConfig(),
         )
-        assert result.tolist() == [
-            True,
-            True,
-            True,
-            False,
-            False,
-            False,
-            True,
-            False,
-            False,
-        ]
+        assert result.tolist() == [True] * 8 + [False]
+    assert task.in_front(angles).tolist() == [
+        True,
+        True,
+        True,
+        False,
+        False,
+        False,
+        True,
+        False,
+        False,
+    ]
 
 
 @pytest.mark.parametrize(
@@ -201,17 +212,115 @@ def test_horizontal_distance_and_bad_facing_stop_punch_phase(env):
     place(env, 0.55)
     assert env.attack.all()
     env.phase[:] = 7
-    place(env, 0.60001)
+    place(env, 0.65001)
     assert not env.attack.any()
     assert not env.phase.any()
     place(env, 0.55, math.pi / 2)
-    assert not env.attack.any()
+    assert env.attack.all() and not env.punching.any()
     place(env, 0.55)
     state = env.state()
     state["opponent"][:, 2] += 10
     torch.testing.assert_close(
         task.geometry(state, env.config)[0], torch.full((2,), 0.55)
     )
+
+
+def test_distance_band_preserves_mode_phase_and_anchor_until_exit(env):
+    place(env, 0.8)
+    a, b = env.physics.root_qi
+
+    def move(distance):
+        env.physics.data.qpos[:, b] = env.physics.data.qpos[:, a] + distance
+        env._prepare()
+
+    move(0.66)
+    assert not env.attack.any()
+    move(0.649)
+    assert env.attack.all() and env.punching.all()
+    env.phase[:] = 7
+    env.age[:] = 20
+    anchor = env.anchor.clone()
+    for distance in (0.651, 0.7, 1.0, 1.5, 0.64, 1.49):
+        move(distance)
+        assert env.attack.all() and env.punching.all()
+        assert (env.phase == 7).all() and (env.age == 20).all()
+        torch.testing.assert_close(env.anchor, anchor)
+    move(1.501)
+    assert not env.attack.any() and not env.punching.any()
+    assert not env.phase.any()
+    move(0.7)
+    assert not env.attack.any()
+    move(0.64)
+    assert env.attack.all()
+
+
+def test_heading_pause_resume_preserves_latched_punch_phase(env):
+    place(env, 0.55)
+    env.phase[:] = 7
+    anchor = env.anchor.clone()
+    a, b = env.physics.root_qi
+    env.physics.data.qpos[:, b : b + 2] = torch.tensor([-0.8, 0.0])
+    env._prepare()
+    assert env.attack.all() and not env.punching.any()
+    assert (env.phase == 7).all()
+    _, _, done, info = env.step(torch.zeros(2, 30))
+    assert not done.any()
+    assert env.attack.all() and not env.punching.any()
+    assert (env.phase == 7).all()
+    assert info["metrics"]["attack_mode"].all()
+    assert info["metrics"]["alignment_only"].all()
+    assert not info["metrics"]["punch_active"].any()
+    assert not info["metrics"]["approach_progress"].any()
+    env.physics.data.qpos[:, b : b + 2] = env.physics.data.qpos[
+        :, a : a + 2
+    ] + torch.tensor([0.8, 0.0])
+    env._prepare()
+    assert env.attack.all() and env.punching.all()
+    assert (env.phase == 7).all()
+    torch.testing.assert_close(env.anchor, anchor)
+    env.step(torch.zeros(2, 30))
+    assert (env.phase == 8).all()
+
+
+def test_episode_reset_clears_only_reset_rows_distance_memory(env):
+    place(env, 0.55)
+    env.phase[:] = 7
+    a, b = env.physics.root_qi
+    env.physics.data.qpos[:, b] = env.physics.data.qpos[:, a] + 0.8
+    env._prepare(torch.tensor([True, False]))
+    assert env.attack.tolist() == [False, True]
+    assert env.punching.tolist() == [False, True]
+    assert env.phase.tolist() == [0, 7]
+
+
+def test_unentered_distance_band_still_approaches_and_receives_progress(env):
+    place(env, 0.8)
+    before = env.state()
+    ref = env.references((1, 2))
+    assert not env.attack.any()
+    assert (
+        ref["point_position"][:, -1, 0, 0] > before["position"][:, 0, 0]
+    ).all()
+    after = {key: value.clone() for key, value in before.items()}
+    after["opponent"][:, 0] -= 0.01
+    flags = torch.zeros(2, dtype=torch.bool)
+    action = torch.zeros(2, 30)
+    _, metrics = task.task_reward(
+        before,
+        after,
+        ref,
+        flags,
+        ~flags,
+        flags.float(),
+        flags,
+        flags,
+        action,
+        action,
+        env.config,
+        engaged=flags,
+    )
+    assert (metrics["approach_progress"] > 0).all()
+    assert not metrics["punch_wrist_position"].any()
 
 
 def test_move_masks_wrist_actions_and_preserves_guard_under_pelvis_rotation(
@@ -269,7 +378,7 @@ def test_near_distance_attacks_when_facing_and_aligns_without_advance(env):
     place(env, 0.599)
     assert env.attack.all()
     place(env, 0.4, math.pi / 2)
-    assert not env.attack.any()
+    assert env.attack.all() and not env.punching.any()
     ref = env.references((1, 2, 3, 4, 5))
     before = env.state()
     torch.testing.assert_close(
@@ -296,6 +405,93 @@ def test_move_wrists_are_raised_compact_guard(env):
     torch.testing.assert_close(
         local, expected.expand(2, 5, -1, -1), atol=1e-6, rtol=1e-5
     )
+
+
+def test_no_torso_contact_timeout_strict_boundary_and_contact_reset(
+    env, monkeypatch
+):
+    place(env, 0.8)
+    env.no_torso_contact_steps[:] = torch.tensor([249, 250])
+    _, _, done, info = env.step(torch.zeros(2, 30))
+    assert not done.any()
+    torch.testing.assert_close(
+        info["metrics"]["no_torso_contact"], torch.tensor([0.0, -0.01])
+    )
+    assert env.no_torso_contact_steps.tolist() == [250, 251]
+    original_step = env.combat.step
+
+    def touch_torso(values):
+        result = original_step(values)
+        env.combat.metrics["robot_A"]["official_torso_contact_samples"] = (
+            torch.tensor([1.0, 0.0])
+        )
+        return result
+
+    monkeypatch.setattr(env.combat, "step", touch_torso)
+    _, _, _, info = env.step(torch.zeros(2, 30))
+    assert env.no_torso_contact_steps.tolist() == [0, 252]
+    assert info["metrics"]["torso_contact"].tolist() == [1, 0]
+    torch.testing.assert_close(
+        info["metrics"]["no_torso_contact"], torch.tensor([0.0, -0.01])
+    )
+    assert env.get_observations()[1, -1] > 1
+
+
+def test_contact_clock_survives_mode_change_but_not_episode_reset(env):
+    place(env, 0.8)
+    env.no_torso_contact_steps[:] = 300
+    a, b = env.physics.root_qi
+    for distance in (0.55, 1.6):
+        env.physics.data.qpos[:, b] = env.physics.data.qpos[:, a] + distance
+        env._prepare()
+        assert (env.no_torso_contact_steps == 300).all()
+    env._prepare(torch.tensor([True, False]))
+    assert env.no_torso_contact_steps.tolist() == [0, 300]
+
+
+def test_stronger_facing_and_upper_tracking_weights(env):
+    from dataclasses import replace
+
+    place(env, 0.55)
+    state = env.state()
+    ref = env.references((1, 2))
+    flags = torch.ones(2, dtype=torch.bool)
+    action = torch.zeros(2, 30)
+
+    def metrics(config):
+        return task.task_reward(
+            state,
+            state,
+            ref,
+            flags,
+            flags,
+            flags.float() * 0,
+            ~flags,
+            ~flags,
+            action,
+            action,
+            config,
+        )[1]
+
+    previous = metrics(
+        replace(
+            env.config,
+            facing_alignment_weight=1.0,
+            facing_progress_weight=0.5,
+            punch_tracking_scale=1.0,
+        )
+    )
+    current = metrics(env.config)
+    torch.testing.assert_close(
+        current["facing_alignment"], 3 * previous["facing_alignment"]
+    )
+    for key in (
+        "punch_wrist_position",
+        "punch_wrist_orientation",
+        "punch_relative_velocity",
+        "punch_arm_joints",
+    ):
+        torch.testing.assert_close(current[key], 2 * previous[key])
 
 
 def test_reward_prefers_tracking_and_does_not_pay_out_of_range_hit(env):
@@ -346,7 +542,7 @@ def test_reward_prefers_tracking_and_does_not_pay_out_of_range_hit(env):
     bad_reward, bm = score(bad)
     assert bool((good > bad_reward).all())
     assert bool((gm["punch_arm_joints"] > bm["punch_arm_joints"]).all())
-    bad["opponent"][:, 0] = 1
+    bad["opponent"][:, 0] = 1.6
     assert not score(bad)[1]["official_hit"].any()
     bad["position"][0] = float("nan")
     reward, metrics = score(bad, invalid=torch.tensor([True, False]))
@@ -453,7 +649,7 @@ def test_mode_changes_blend_from_measured_pose_without_physics_reset(
 
     place(env, 0.7)
     monkeypatch.setattr(env.combat, "_reset", reject_reset)
-    for distance, expected in ((0.55, True), (0.7, False), (0.55, True)):
+    for distance, expected in ((0.55, True), (1.6, False), (0.55, True)):
         a, b = env.physics.root_qi
         env.physics.data.qpos[:, b] = env.physics.data.qpos[:, a] + distance
         env._prepare()
@@ -555,14 +751,14 @@ def test_native_synthetic_ppo_save_and_evaluation_contract(env, tmp_path):
         updates=1,
         rollout_steps=4,
         save_every=1,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         seed=37,
         skill="kangning037_combat",
     )
     result = train_teacher(env, tmp_path / "train", args)
     saved = torch.load(result["checkpoint"], weights_only=False)
-    assert saved["format"] == "kangning037_range_teacher_v3"
-    assert saved["observation_dim"] == 1355
+    assert saved["format"] == "kangning037_range_teacher_v6"
+    assert saved["observation_dim"] == 1356
     assert env.physics.steps == 16
     assert len(saved["optimizer"]["state"]) > 0
     assert saved["model"]["actor.4.weight"].abs().sum() > 0
@@ -576,3 +772,118 @@ def test_native_synthetic_ppo_save_and_evaluation_contract(env, tmp_path):
     assert (
         json.loads((args.output / "evaluation.json").read_text())["steps"] == 2
     )
+
+
+def test_reach_rewards_active_close_extension_not_holding_or_recovery(env):
+    place(env, 0.55)
+    state = env.state()
+    ref = {
+        "point_position": state["position"][:, None].repeat(1, 2, 1, 1),
+        "point_quaternion": state["quaternion"][:, None].repeat(1, 2, 1, 1),
+        "joint_position": state["joint_position"][:, None].repeat(1, 2, 1),
+        "bridge": torch.zeros(2, 2, dtype=torch.bool),
+    }
+    ref["point_position"][:, 1, 1:3, 0] += 0.02
+    reach = {
+        "gap_m": torch.tensor([[0.03, 0.03], [0.3, 0.3]]),
+        "arm_aim_speed_mps": torch.ones(2, 2),
+        "arm_outward_speed_mps": torch.ones(2, 2),
+        "closing_speed_mps": torch.ones(2, 2),
+        "target_valid": torch.ones(2, 2, dtype=torch.bool),
+    }
+    yes = torch.ones(2, dtype=torch.bool)
+    action = torch.zeros(2, 30)
+
+    def score():
+        return task.task_reward(
+            state,
+            state,
+            ref,
+            yes,
+            yes,
+            action[:, 0],
+            ~yes,
+            ~yes,
+            action,
+            action,
+            env.config,
+            reach=reach,
+        )[1]
+
+    metrics = score()
+    assert metrics["punch_reach"][0] > metrics["punch_reach"][1] > 0
+    assert metrics["punch_reach"].max() <= 0.02 * env.config.reach_weight
+    state["position"][:, 1:3, 0] += 0.10
+    assert score()["reach_tracking_wrist_error_m"].max() < 1e-6
+    state["position"][:, 1:3, 1] += 0.10
+    assert score()["reach_tracking_wrist_error_m"].min() > 0.05
+    state["position"][:, 1:3, 1] -= 0.10
+    ref["point_position"][:, 1, 1:3, 0] -= 0.02
+    apex_error = score()["reach_tracking_wrist_error_m"]
+    ref["point_position"][:, 1, 1:3, 0] -= 0.02
+    assert (score()["reach_tracking_wrist_error_m"] > apex_error).all()
+    ref["point_position"][:, 1, 1:3, 0] += 0.04
+    state["position"][:, 1:3, 0] -= 0.10
+    reach["arm_aim_speed_mps"].zero_()
+    assert not score()["punch_reach"].any()  # body movement alone cannot score
+    reach["arm_aim_speed_mps"].fill_(1)
+    ref["point_position"][:, 1, 1:3, 0] -= 0.04
+    assert not score()["punch_reach"].any()  # reference recovery cannot score
+    ref["point_position"][:, 1, 1:3, 0] += 0.04
+    ref["bridge"].fill_(True)
+    assert not score()["punch_reach"].any()
+    ref["bridge"].zero_()
+    state["opponent"][:, 0] = 0.9
+    assert not score()["punch_reach"].any()  # no stretching across large gaps
+    reach["target_valid"][0, 0] = False
+    with pytest.raises(FloatingPointError):
+        score()
+
+
+def test_explicit_v5_weights_initialization_verifies_sources_and_contract(
+    env, tmp_path
+):
+    import hashlib
+    from holoboxing.training.skills.actor import SkillActor
+    from holoboxing.training.skills.train_fixed_punch import initialize_teacher
+
+    original = SkillActor(env.observation_dim)
+    with torch.no_grad():
+        original.actor[-1].bias.fill_(0.12)
+    source = tmp_path / "original" / "holoboxing" / "training"
+    source.mkdir(parents=True)
+    file = source / "test_source.py"
+    file.write_text("verified source", encoding="utf-8")
+    recipe = dict(env.recipe, version="kangning037_range_teacher_v5")
+    for key in (
+        "reach_reward",
+        "reach_weight",
+        "reach_gap_scale_m",
+        "reach_forward_allowance_m",
+    ):
+        recipe.pop(key)
+    saved = {
+        "format": "kangning037_range_teacher_v5",
+        "observation_dim": env.observation_dim,
+        "action_dim": 30,
+        "hidden_dims": (256, 128),
+        "model": original.state_dict(),
+        "reference_manifest": env.library.manifest,
+        "environment_recipe": recipe,
+        "implementation_sources": {
+            "training/test_source.py": hashlib.sha256(
+                file.read_bytes()
+            ).hexdigest()
+        },
+        "update": 512,
+    }
+    checkpoint = tmp_path / "v5.pt"
+    torch.save(saved, checkpoint)
+    initialize_teacher(env, checkpoint, tmp_path / "original")
+    for key, value in original.state_dict().items():
+        torch.testing.assert_close(env.initial_model_state[key], value)
+    assert env.initialization["source_update"] == 512
+    assert env.initialization["source_closure_verified"]
+    file.write_text("changed source", encoding="utf-8")
+    with pytest.raises(ValueError, match="hash differs"):
+        initialize_teacher(env, checkpoint, tmp_path / "original")

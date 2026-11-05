@@ -770,6 +770,14 @@ class MujocoSandbagEnv:
                 key: value.detach().clone()
                 for key, value in self.physics.state().items()
             }
+            # Optional task geometry must be measured at this same instant,
+            # before terminal worlds are reset below.
+            capture = getattr(self, "transition_measurement", None)
+            if capture is not None:
+                for key, value in capture(self).items():
+                    if key in self.last_transition_state:
+                        raise ValueError(f"Duplicate transition field: {key}")
+                    self.last_transition_state[key] = value.detach().clone()
         ids = done.nonzero().flatten()
         if len(ids):
             self._reset(ids)
