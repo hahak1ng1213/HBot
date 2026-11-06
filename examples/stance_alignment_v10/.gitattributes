@@ -1,0 +1,6 @@
+# Preserve the exact bytes of the validated experiment snapshot and its hashes.
+* whitespace=trailing-space,space-before-tab,cr-at-eol
+*.py -text
+*.json -text
+candidate_50hz/*.py -text
+candidate_50hz/*.json -text

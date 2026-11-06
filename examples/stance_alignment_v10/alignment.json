@@ -1,0 +1,25 @@
+{
+  "version": "stance-alignment-v10",
+  "near_distance_m": 0.6,
+  "approach_alignment_distance_m": 1.1,
+  "attack_pelvis_deg": 8.0,
+  "attack_feet_deg": 12.0,
+  "approach_pelvis_deg": 12.0,
+  "approach_feet_deg": 16.0,
+  "far_pelvis_deg": 30.0,
+  "far_feet_deg": 35.0,
+  "foot_heading_offsets_rad": [
+    0.6112600280492184,
+    1.034381248502372
+  ],
+  "pelvis_heading_offset_rad": 0.5322530971589385,
+  "foot_target_weight": 0.25,
+  "max_foot_target_adjustment_deg": 5.0,
+  "settling_reference_deadband_deg": 2.5,
+  "angle_choices_deg": [
+    5,
+    10,
+    20
+  ],
+  "training_started": false
+}

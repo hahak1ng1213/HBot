@@ -1,0 +1,20 @@
+{
+  "names": [
+    "opponent_position_forward_m",
+    "opponent_position_left_m",
+    "opponent_position_up_m",
+    "opponent_world_velocity_forward_m_s",
+    "opponent_world_velocity_left_m_s",
+    "opponent_world_velocity_up_m_s",
+    "horizontal_distance_m",
+    "bearing_sin",
+    "bearing_cos",
+    "opponent_heading_relative_sin",
+    "opponent_heading_relative_cos"
+  ],
+  "dimension": 11,
+  "frame": "tactical heading, +X advance/punch direction, +Y left, +Z up",
+  "heading_offset_from_pelvis_rad": 0.5322530971589385,
+  "self_input": "No self joints, posture, score or history. Self virtual position and heading used only as coordinate reference.",
+  "velocity": "Opponent world linear velocity rotated into self heading axes; not subtracting self velocity"
+}

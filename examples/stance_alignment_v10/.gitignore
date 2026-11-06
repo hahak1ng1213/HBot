@@ -1,0 +1,9 @@
+candidate_50hz/motions/
+candidate_50hz/selector.pt
+candidate_50hz/selector-weights.json
+approach/
+eval*/
+demo*/
+runtime/
+control-preflight.json
+__pycache__/

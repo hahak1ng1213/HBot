@@ -1,0 +1,12 @@
+{
+  "boxing_skill_control.py": "286162c08c943da83e42c53fa304f9358bd83ff020e35a041cdd5432b270b3c2",
+  "features.json": "e1477fe0eb99e565dbc7cb937ed11bd874eb628b2ca458d841f5dd8c4a641fac",
+  "rules.json": "8a358d395994da9efd4a1bc58d3eebc822f29e993c40d6c2a2451052244c6c64",
+  "selector-weights.json": "cbf3f4309c41f9aaf2c4a7b4719b58c6ebb144f00c59eb5c30c75a3f709ab3d5",
+  "selector.pt": "446ba64eb290ad79f163357bf2bb837ab2d4e1c08ab1b3a02daa659ec408e0a6",
+  "motions/forward_short.npz": "f845783e743cc5598774ca72829c6ecd83295e39c6c7203e16d97ab3eb67cb9c",
+  "motions/straight_lr.npz": "d5f1469e63aa93c3533de6460c5d019cf66036fd1c2678210e6341acf9593192",
+  "motions/turn_left.npz": "45a8c9c10fb21d72eae452edaac33e4b12f0484a193c94f014b8081e1edbdca7",
+  "motions/turn_right.npz": "abce66fae85d59ee5967f351eaa109bf9469052b00de99b729251accfa09944d",
+  "motions/uppercut_lr.npz": "5b8c9fe60d78db2598cb66fe3dd0518a666d3a7a84b9a84f3c214d1a896a9869"
+}

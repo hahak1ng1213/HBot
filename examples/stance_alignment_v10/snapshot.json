@@ -1,0 +1,45 @@
+{
+  "version": "stance-alignment-v10-second-pass",
+  "files": {
+    "stance_alignment_control.py": "55c667f5d985516fd4de7e25358fe464ef39bd0532690fb571ec4212e1c759d4",
+    "evaluate_alignment.py": "e95a473ba3d460292a722e9be5242cee11828f5a225534447f8148f8487a6dbb",
+    "analyze_alignment.py": "f22de41ba607c500bf2ded994e7088a9c3fb5bb01a93ba25d8d804d1f2d8b6d4",
+    "render_demo.py": "9a1ed620eb991dd5617d5ef68cb5f2c1b3c41ac4712e9aa262bbc8c2435b0650",
+    "check_alignment.py": "dfd766dfc7b72550e84a6dd934763dd13246e11a961e0380a79debff9a6feb5c",
+    "alignment.json": "73ee77c6951d4776e4f4b64389450f90b354269b0ce4cf3331da74f52d0512f2",
+    "candidate_50hz/boxing_skill_control.py": "286162c08c943da83e42c53fa304f9358bd83ff020e35a041cdd5432b270b3c2",
+    "candidate_50hz/features.json": "e1477fe0eb99e565dbc7cb937ed11bd874eb628b2ca458d841f5dd8c4a641fac",
+    "candidate_50hz/rules.json": "8a358d395994da9efd4a1bc58d3eebc822f29e993c40d6c2a2451052244c6c64",
+    "candidate_50hz/integrity.json": "c4dbf75bd102c1c04f65f08b6f5b2895d147c7535cd080034d5117322e142fd7"
+  },
+  "external_approach_assets": {
+    "forward_05cm.npz": "36b23a740bee41ddac396e5ae45eccc805a1c195ec0a43bace7f375b210bc6d5",
+    "forward_12cm.npz": "df675ce5ebd72c1ddac6f7146fd06d3946315e24477eb921691e7d97d5525aee",
+    "turn_right_05.npz": "93a170709df4d2ddacf9eac7ef2de47b0cffb7a1940e6c2cf46c154f8629aca2",
+    "turn_left_05.npz": "fa7ec9e4c827d0ad7b1f929b47db297e2c3bcda62ec12caf02b711c445685f28",
+    "forward_03cm.npz": "5861b5675f78db561f779be656205d2bfc69db75a77a5e5ecea18897aae66ab7",
+    "turn_right_10.npz": "9221a4a8b0dec1b3efb0bc7dd6403ae80a1804aaeac62a268d9319ef2231d4a6",
+    "forward_08cm.npz": "c6e4f80e2ab324aec7bb5c4238068728fb0688adfacf9166df85390b69620b46",
+    "turn_left_10.npz": "32a7786342a5e882b463552db39ac551f203980dff414bc12661944dca141123"
+  },
+  "expected_lower_sha256": "b0681976135eed572d1d20aefc52ec65c149bdc636f2594a6436fa7136a3fc86",
+  "expected_blue_sha256": "b5af327c5fc4754d9d3586f5ae96b00f36f5f8f7619753f6e4cb22fb96f9cdc5",
+  "evidence": {
+    "seed": 273,
+    "simulation_seconds": 60,
+    "hits": [
+      1,
+      0
+    ],
+    "first_fall_seconds": [
+      null,
+      null
+    ],
+    "hit_time_s": 31.17,
+    "hit_impulse_ns": 5.191330384949788,
+    "states_sha256": "32470dabe2c0d91b308ec9964045ca169b8d93e4a08a6db269a2a74385085bf9",
+    "video_sha256": "49d52a8a1ce4f26eddb7fb59c9d8b8b16beb3befdaeb950d40406c3de551782a"
+  },
+  "training_started": false,
+  "standalone_onnx": false
+}

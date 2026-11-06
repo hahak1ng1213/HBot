@@ -1,0 +1,21 @@
+{
+  "turn_threshold_deg": 30.0,
+  "straight_max_m": 0.6,
+  "uppercut_max_m": 0.5,
+  "too_close_m": 0.35,
+  "far_zone_m": 1.5,
+  "priority": [
+    "turn if abs(bearing)>30deg",
+    "advance if distance>0.60m",
+    "straight if distance>0.50m",
+    "uppercut otherwise"
+  ],
+  "too_close": "still uppercut when aligned; independent too_close flag",
+  "boundary": "30deg aligned; 0.60m straight; 0.50m uppercut",
+  "scheduling": "Select only at completed skill boundaries; every-frame suggested labels are also saved",
+  "version": "standard-five-range060-20261106",
+  "calibration_status": "User requested +0.10m attack thresholds",
+  "approach_target_m": 0.56,
+  "settle_after_forward_max_m": 0.65,
+  "short_step_start_m": 1.1
+}
