@@ -1,0 +1,25 @@
+{
+  "state": "completed",
+  "source": "/home/zhanghan/projects/HBot-student-submission-20261107/evaluation-enriched-0-latest",
+  "model_sha256": "1ee3d8f0c9dccaa25f3dcb0e81902104fee252f52667b68e974d7a3f2ead87c9",
+  "source_sha256": "1e0f375035a68db409b05015584aa548bd41f084c7637bb250e265239ac9747d",
+  "samples": 3000,
+  "checked": 3000,
+  "failures": [],
+  "maxima": {
+    "cpu_position_m": 5.415910777628596e-07,
+    "cpu_max_position_error_m": 5.415911032374575e-07,
+    "cpu_max_rotation_error_rad": 1.4934436902959421e-06,
+    "cpu_max_rotation_component_error": 1.0132789611816406e-06,
+    "cpu_max_abs_error": 1.0132789611816406e-06,
+    "cuda_position_m": 2.3888378564151935e-07,
+    "cuda_max_position_error_m": 2.388837865275353e-07,
+    "cuda_max_rotation_error_rad": 5.999992013741191e-07,
+    "cuda_max_rotation_component_error": 4.917383193969727e-07,
+    "cuda_max_abs_error": 4.917383193969727e-07
+  },
+  "deterministic_active_repeats": 20,
+  "near_aligned_probe_rows": 47,
+  "repeat_probe_index": 2329,
+  "wall_seconds": 54.404722690582275
+}

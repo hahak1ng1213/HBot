@@ -1,0 +1,11 @@
+{
+  "frames": 1500,
+  "seconds": 60.0,
+  "source": "/home/zhanghan/projects/HBot-student-submission-20261107/evaluation-enriched-0-latest",
+  "source_sha256": "27432bb3de64fdd00495fd26016f18ba443e245245e6ea341ddfa147b21dba6c",
+  "onnx_sha256": "1ee3d8f0c9dccaa25f3dcb0e81902104fee252f52667b68e974d7a3f2ead87c9",
+  "video_sha256": "0dd83973a1df60bc037f68aaa12d59a4129d6b4ff53058311fecf931f1ba7e4c",
+  "resimulated": false,
+  "teacher_assistance": false,
+  "render_only_wall_opacity": 0.12
+}

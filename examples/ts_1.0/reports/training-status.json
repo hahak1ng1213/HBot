@@ -1,0 +1,81 @@
+{
+  "state": "completed",
+  "bundle_sha256": "884adc2b2612305484b760120e247f72ec39429dcbc5449c85fc9297697d9a89",
+  "epochs_requested": 200,
+  "input": [
+    1,
+    1097
+  ],
+  "output": [
+    1,
+    225
+  ],
+  "external_state": false,
+  "validation_worlds": [
+    6,
+    7
+  ],
+  "initialization": "new direct pose network; existing blue checkpoint has an old-motion frozen latent decoder",
+  "checkpoint": "student-0/best.pt",
+  "source_hashes": {
+    "train_student.py": "c2ec3e544cb58cd14fd55e5ec5f5465ce147c5c82be040b504383123169804a4",
+    "student_policy.py": "81d68620b47e328c9f0b2df431bf48811fd53222b83cec4c4f4223547040857b"
+  },
+  "wall_seconds": 76.13076083897613,
+  "weights_lineage": {
+    "path": "student-0/best.pt",
+    "sha256": "6b3a84ddd0ab806cdf95583e913372d8ddc7de7a54eda5cddfff655497b9bcff",
+    "previous_bundle_sha256": "884adc2b2612305484b760120e247f72ec39429dcbc5449c85fc9297697d9a89",
+    "optimizer_restored": false
+  },
+  "train_rows": 67200,
+  "validation_rows": 22500,
+  "by_family_train": {
+    "forward": 37126,
+    "ready-entry": 1300,
+    "recover_guard": 7786,
+    "straight_lr": 14471,
+    "turn": 4189,
+    "uppercut_lr": 2328
+  },
+  "by_family_validation": {
+    "forward": 11994,
+    "ready-entry": 400,
+    "recover_guard": 3203,
+    "straight_lr": 5228,
+    "turn": 1571,
+    "uppercut_lr": 104
+  },
+  "provenance": [
+    {
+      "path": "/home/zhanghan/projects/HBot-student-submission-20261107/teacher-general/samples.npz",
+      "sha256": "2bca01d4f332c9ad0ff8a43bb8865f0389fbe8a86f92f5af4b2cbf4a72d32cb9",
+      "rows": 18000
+    },
+    {
+      "path": "/home/zhanghan/projects/HBot-student-submission-20261107/teacher-close/samples.npz",
+      "sha256": "545481288904793784cc6dda12e018929be0e3bbfbf788c20252dda214a3b374",
+      "rows": 12000
+    },
+    {
+      "path": "/home/zhanghan/projects/HBot-student-submission-20261107/teacher-native/samples.npz",
+      "sha256": "7b8847c9e4719bd25244e5fba5b414b6606f60dd698213c81846e31e0417d411",
+      "rows": 24000
+    },
+    {
+      "path": "/home/zhanghan/projects/HBot-student-submission-20261107/teacher-enrichment-1/samples.npz",
+      "sha256": "9aac2e63ffc8e39f7c0de469a2db41f8331eba826ce253a174b034a8a29bfed3",
+      "rows": 36000
+    }
+  ],
+  "epoch": 88,
+  "updates": 11616,
+  "training_loss": 0.0014599992543281545,
+  "validation_loss": 0.026871629059314728,
+  "position_rmse_m": 0.04124179109930992,
+  "position_p95_m": 0.0459258146584034,
+  "wrist_rmse_m": 0.04002092406153679,
+  "best_epoch": 58,
+  "best_validation_loss": 0.026130435988307,
+  "best_checkpoint_sha256": "e2ac0dce1a41277a8ab64bc384b68bf50d0f37cbc02f22921ea187bb9358fda6"
+}

@@ -1,0 +1,9 @@
+# Keep only the curated release assets, not generated runs or frozen-runtime copies.
+!artifacts/*.onnx
+!artifacts/*.pt
+!bundle/motions/*.npz
+!demos/*/*.mp4
+bundle/runtime/
+runs/
+*.log
+__pycache__/

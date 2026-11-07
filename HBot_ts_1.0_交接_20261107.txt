@@ -1,0 +1,213 @@
+HBot ts_1.0 项目、服务器与 GitHub 交接
+更新时间：2026-11-07，北京时间
+
+一、接手先读
+
+当前可用学生是 student_1.0.onnx，GitHub 分支 ts_1.0。
+它就是已经展示60秒12:0 demo 的 student-enriched-0/latest.pt 导出模型，
+只是按用户要求重命名，没有改变模型内容，没有针对最新距离问题重新训练。
+不要误选 retrieval、temporal、lead、fast-export 或 DAgger 后续候选。
+
+用户最近要求：保存本版相关代码到 GitHub 分支 ts_1.0；不要上传无用临时测试代码；
+可保留有参考价值的 demo；学生模型命名 student_1.0；交接后在新窗口继续。
+用户先前明确“测时先不管，继续其他工作”，该要求仍有效。
+本次整理未启动训练、仿真或测时，没有上传比赛平台，没有合并主分支。
+
+工作主线：已经认可教师的直拳/勾拳动作与连续回收，正在把教师能力迁移到
+符合比赛公开输入输出要求的学生。学生基本可用，但攻击持续性和模仿质量仍需改进。
+旧交接 HBot_当前方案与服务器交接_20261106.txt 中“没有学生ONNX/禁止训练”等
+是旧阶段状态，后续用户已明确授权训练；不能把旧文档当当前用户指令。
+当前无需恢复任何过去的后台调度器，是否启动下一轮工作以新窗口用户请求为准。
+
+二、GitHub 与本机
+
+仓库：https://github.com/hahak1ng1213/HBot
+分支：https://github.com/hahak1ng1213/HBot/tree/ts_1.0
+父版本：6a29e286d6340f743c57ba6fbd8b34016df27f7c
+父分支：feat/stance-alignment-v10-20261106
+这是为当前成果创建的独立分支，未覆盖父分支、main 或其他本地工作。
+可用 git rev-parse origin/ts_1.0 查询发布提交；本机交接副本另附实际提交号。
+
+本机 Windows PowerShell 工作区：D:\研\H-BOT
+当前分支独立工作树：D:\研\H-BOT\HBot-ts-1.0
+之前的工作树：D:\研\H-BOT\HBot-stance-alignment-branch
+原始学生实验脚本：D:\研\H-BOT\datasets\student-submission-20261107
+最终交付：D:\研\H-BOT\exports\student-submission-20261107\FINAL
+当前模型：上述 FINAL\student_1.0.onnx
+训练检查点：上述 FINAL\student_1.0.pt
+本机学生视频：D:\研\H-BOT\demos\student-submission-20261107\enriched-0-latest\motion.mp4
+
+GitHub 主要内容位于 examples/ts_1.0：
+  artifacts/student_1.0.onnx、student_1.0.pt：最终模型与可继续训练的检查点。
+  student_policy.py：网络、当前姿态基准、归一化、输出旋转正交化。
+  student_common.py：公开观测边界、冻结包加载、教师入场过渡。
+  collect_student.py：教师采样、混合采样、纯学生/纯教师实际物理评测。
+  train_student.py：按动作族加权监督学习、world级验证划分、早停、检查点。
+  export_student.py：公开ONNX接口、CPU/CUDA导出一致性、确定性检查。
+  render_student.py：真实保存轨迹渲染，不重新运行物理。
+  audit_motion.py：实际拳路、伸肘、速度和姿态诊断。
+  audit_student_parity.py：实际输入逐帧数值一致性，无测时流程。
+  bundle/state_aware_control.py、motions/：教师执行器和13个冻结动作。
+  bundle/manifest.json：原始完整运行包、对手与来源哈希。
+  reports/：最终选择、四场验证、数值一致性、训练记录、低出拳时段分析。
+  demos/：最终学生、教师验收、连续直拳回收前后对照，附视频来源与哈希。
+  snapshot.json：此次整理文件的指纹和外部依赖说明。
+  README.txt：可直接使用的评测、训练、导出、渲染命令与注意事项。
+
+本次新增提交不包含原始训练样本、完整物理状态大文件、缓存、日志、一次性
+诊断/测时脚本、未采用实验调度器或历史候选权重。既有仓库测试未做破坏性清理。
+选定模型、动作和视频直接存 Git，子目录属性覆盖 LFS；无需另外下载这些文件。
+仓库其他历史资产仍可能使用 LFS。大规模训练数据、机器人资产和冻结下层在服务器。
+
+三、服务器
+
+连接：zhanghan@10.184.17.93；hostname=node01，Linux。
+认证沿用本机已有 SSH 配置/密钥；不要将密钥内容、令牌或密码上传仓库。
+本机交接副本记录具体密钥文件路径（GitHub 版不包含认证文件位置）。
+
+学生完整实验目录：
+  /home/zhanghan/projects/HBot-student-submission-20261107
+教师及动作开发目录：
+  /home/zhanghan/projects/HBot-stance-alignment-v10-20261106
+Python：/home/zhanghan/envs/node04/holoboxing/bin/python
+机器人资产：/home/zhanghan/datasets/hbot-assets
+冻结下层：/home/zhanghan/datasets/holomotion-v2
+视频依赖：/home/zhanghan/tools/hbot-video
+蓝方：/home/zhanghan/runs/hbot/approach-strike-node02-20261101-001552/seed44/train/model_1536.pt
+
+学生目录关键位置：
+  bundle/：含完整冻结 runtime、13动作、教师与 manifest。
+  teacher-general/、teacher-close/、teacher-native/、teacher-enrichment-1/：最终训练数据。
+  student-0/best.pt：当前教师数据首次拟合后的初始化。
+  student-enriched-0/latest.pt：本次最终检查点，epoch88，保留历史名字。
+  student-enriched-0/export-latest/student.onnx：原始导出，保留历史名字。
+  final-submission/student_1.0.onnx：重命名后的交付副本。
+  final-submission/student_1.0.pt：相应训练检查点副本。
+  evaluation-enriched-0-latest/：最终学生seed273的真实轨迹、逐帧输入、指标。
+  teacher-baseline-273/：同一初始设置的教师基线，后续世界轨迹与学生不同。
+  demo-enriched-0-latest/：对应学生录像。
+  quiet-window-analysis.json：本次20–40秒低出拳的离线分析。
+其他候选目录只作历史记录，不能按编号最大或文件最新直接替换交付模型。
+
+已验证基础环境：Torch2.6.0+cu124、ONNX1.18.0、ORT1.22.0、MuJoCo3.5.0。
+node01有4张RTX3090。本次训练只用了当时空闲的物理GPU0：
+  GPU-416cb80b-45b7-b6a7-2786-b0be58ec88d1
+student_common.py 默认绑定该UUID；下一次启动前必须重新检查并设置
+CUDA_VISIBLE_DEVICES，进程内设备仍是 cuda:0。
+2026-11-07约14:37核验：没有本次学生任务进程；四卡均有其他任务在使用，
+GPU0约20GB显存/100%利用率。这个快照不代表后续仍忙，也不代表可以终止那些任务。
+先用 nvidia-smi 检查；只使用真正空闲资源，不修改共享驱动或影响其他任务。
+
+GitHub 未重复提交 bundle/runtime。运行脚本可直接传服务器完整 --bundle；
+也可按 examples/ts_1.0/README.txt 从已冻结目录复制 runtime 到本分支 bundle。
+根仓库与冻结 runtime 有差异，不能随意拿根目录替换并跳过指纹校验。
+bundle/manifest.json 自身的精确字节也是检查点匹配依据，修改路径会改变指纹。
+
+四、模型接口与训练来源
+
+唯一交付模型 SHA256：
+  1ee3d8f0c9dccaa25f3dcb0e81902104fee252f52667b68e974d7a3f2ead87c9
+大小：4,102,102字节。
+检查点 SHA256：
+  842cdc018a0d1ffd0ea5518cedfa20812cced5511a1a59ba2ddaa6361de5be4e
+教师执行器 SHA256：
+  817209a0d13962fed8a80affab9d003565d32fd2cfffb9d0531c97fc70744115
+冻结 manifest SHA256：
+  884adc2b2612305484b760120e247f72ec39429dcbc5449c85fc9297697d9a89
+
+输入：obs float32[1,1097]；输出：target_pose float32[1,225]。
+公开观测：10帧×108历史特征、对手五点位置15维、比赛上下文2维。
+网络实际只用前1095维，不输入教师阶段、动作ID或隐藏状态。
+C225：未来5帧×5点×9维；位置3维加旋转X/Z轴6维，使用当前完整骨盆坐标系。
+不能把相对坐标误当水平heading坐标，完整骨盆俯仰/侧倾也必须处理。
+模型是 MLP 1095→512→512→256→225，ELU，当前姿态残差，内置归一化。
+推理不需要 Python 教师、动作库或任何外部权重。ONNX 不包含冻结下层。
+
+最终阶段采用教师独立执行的完整动作数据做监督蒸馏：
+  teacher-general：8环境×45秒，seed71201。
+  teacher-close：8环境×30秒，seed71301，guard-start近身初始化。
+  teacher-native：8环境×60秒，seed71401，原生复位。
+  teacher-enrichment-1：8环境×90秒，seed77301，一般场景。
+共90000原始行，健康/有限值过滤后67200训练、22500验证；world6/7用于验证。
+动作族平衡权重，位置误差权重10倍，AdamW；每轮随机批512。
+最终训练到88epoch（早停），不是按固定30秒简单截断。
+latest在实际闭环表现更好，因此选epoch88，而不是仅按最低验证损失选best(epoch58)。
+不应仅凭监督损失下降就宣布出拳动作或实战进步。
+
+初始化链：旧项目 HBot-student-four-punch-20261107-v1/student-2/best.pt
+  → 当前 student-0/best.pt → student-enriched-0/latest.pt。
+均为权重初始化，优化器未恢复；最后阶段数据是纯教师执行，不能把这点扩大成
+“整个历史训练从未用过DAgger”。当前 --checkpoint 也只加载权重，不恢复优化器。
+改教师后需创建新冻结包、新数据目录；跨包初始化应明确使用 --warmstart。
+不要篡改旧manifest或数据status以强行通过同包检查。
+
+五、验证与证据边界
+
+冻结蓝方60秒比分（红学生/红教师各自对蓝方，不是师生互打）：
+  seed273：学生12:0；教师7:0。
+  seed284：学生12:0；教师17:0。
+  seed371：学生2:0；教师7:0。
+  seed577：学生7:0；教师3:0。
+273/284用于选择，371/577为选定后留出测试；学生四场无倒地/非法帧。
+3000真实输入CPU/CUDA导出一致性通过，零失败；20次重复推理一致。
+这些是原生MuJoCo实际物理结果，机器人资产、冻结下层和裁判未为得分而修改。
+并非参考动作直接播放；学生演示没有教师接管。
+
+正式比赛 GPU 仿真入口受服务器驱动 CUDA12.2 与固定运行时最低12.4不兼容阻挡。
+原生CPU物理和ONNX CUDA推理可运行。没有完成官方5090资格验收或实际平台提交。
+用户要求测时暂缓；不要复用此前其他候选/繁忙GPU的测时数据声称本模型通过。
+
+六、教师动作与用户已经认可的要求
+
+直拳从护架自然打向自身中轴线/正对对手胸部中央，肘部从下方向前逐渐伸展，
+不能明显外展绕拳。左右拳目标都在胸部中间，右拳不需要大幅扭腰。
+拳套应沿前臂自然延伸；不主动拧前臂翻腕，允许随伸肘自然改变俯仰。
+参考伸肘目标170–180°，实际物理仍需测量，不把参考角度当执行角度。
+连续直拳要“打出去—收回来—再打出去”，不能在末端上下画圈或只摆拳套。
+勾拳已较满意，仅右拳末端曾有轻微晃动；用户不希望因此大改勾拳。
+少收稳，及时转向，不必完全对准才出拳；前进和首次出手速度以后再优化。
+用户接受4拳/秒；这是持续攻击时的目标节奏，不是整场每秒实际都打4拳。
+
+冻结教师主要参数：forward_rate1.7、turn_rate1.8；直拳门槛0.60m，
+勾拳0.45m，接近目标0.54m；身体偏角22°、脚部32°。
+距离指骨盆水平距离，不是拳套与胸部距离。此前按用户要求整体缩短过5cm。
+单臂周期0.5秒、双臂相差0.25秒；外送0.08秒、保持0.10、回收0.10、护架0.22。
+直拳前向跟踪补偿0.40m，是目标跟踪补偿，不是直接加长骨骼。
+安全状态来自实际骨盆/脚部偏差、速度、倾斜和高度；不能只盯着对手位置。
+动作周期结束才重新选招，不是每个控制帧都重新决定；不安全状态可提前中断。
+
+七、最新问题：学生demo20–40秒出拳很少
+
+本窗口已完成分析，尚未实施修复：
+  20–30秒：估算4次明显伸拳，+1分。
+  30–40秒：0次，+0分。
+  40–50秒：15次，+6分。
+  50–60秒：14次，+1分。
+最后10秒确实拳多，但得分最多的是40–50秒。伸拳数不是裁判命中数。
+20–40秒距离中位数66.4cm，19.44秒超过60cm门槛；身体偏角中位数8.3°，
+脚部角度一直合格。同时符合距离/角度条件仅0.40秒，40–50秒为1.84秒。
+推断：起拳条件和分离的“前进—再决策—出拳”使近距离等待增加。
+教师另一场在20–40秒仍有约19次伸拳，学生约4次；学生也存在额外模仿损失。
+两场轨迹不同，不能仅凭这个对比把所有原因归于教师或学生。
+
+特别注意：纯学生评测中的 metrics.skills 是影子教师建议，不是学生真实动作ID。
+影子教师生成的参考未实际执行，跟踪误差/收稳标签可能包含反事实偏差。
+不要把影子教师recover的时长直接解释为学生停拳原因。
+teacher_fraction=0时控制完全来自学生ONNX；教师标签不参与动作。
+
+值得继续验证的方向：
+  追近能否真正缩短距离，是否在阈值附近反复踏步；
+  起拳与维持连拳采用不同条件，允许小幅距离波动并跟进；
+  用拳套到胸部的可达性与相对运动辅助决策，而不是只看骨盆距离；
+  修好教师后再增加完整进攻片段监督，并以多随机种子实际动作和得分选学生。
+这些是建议，不是已验证改进；不要未经验证就宣称抬高距离门槛一定有效。
+优先保留已满意的出拳/回收轨迹，不因攻击频率问题重新大改拳路或冻结下层。
+
+八、新窗口建议入口
+
+先读这份交接和 examples/ts_1.0/README.txt，确认分支、模型哈希和服务器任务状态。
+查看 demos/student/motion.mp4 的20–40秒，再结合 quiet-window-analysis.json。
+不要恢复历史deadline_pipeline.py等进程或自动启动训练。
+需要继续开发时从当前ts_1.0留出基线，使用新输出目录；保留当前ONNX便于回退。
+适用仓库 AGENTS.md 的源码/技能规则；用户当前请求的优先级高于历史文档描述。
+后续提交/推送须有用户授权；本次授权限于保存这个版本及其交接成果。

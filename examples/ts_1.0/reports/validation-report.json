@@ -1,0 +1,237 @@
+{
+  "state": "completed",
+  "model": "student_1.0.onnx",
+  "sha256": "1ee3d8f0c9dccaa25f3dcb0e81902104fee252f52667b68e974d7a3f2ead87c9",
+  "bytes": 4102102,
+  "input": {
+    "name": "obs",
+    "dtype": "float32",
+    "shape": [
+      1,
+      1097
+    ]
+  },
+  "output": {
+    "name": "target_pose",
+    "dtype": "float32",
+    "shape": [
+      1,
+      225
+    ]
+  },
+  "method": "Teacher-only behavior cloning with complete-motion enrichment; compatible weights-only initialization, current-pose residual neural policy",
+  "external_state": false,
+  "external_weights": false,
+  "teacher_assistance_at_inference": false,
+  "comparisons": [
+    {
+      "seed": 273,
+      "split": "selection",
+      "seconds": 60,
+      "student_hits": [
+        12,
+        0
+      ],
+      "teacher_hits": [
+        7,
+        0
+      ],
+      "student_first_fall_s": [
+        null,
+        null
+      ],
+      "teacher_first_fall_s": [
+        null,
+        null
+      ],
+      "student_invalid_frames": 0,
+      "student_source": "evaluation-enriched-0-latest",
+      "student_samples_sha256": "1e0f375035a68db409b05015584aa548bd41f084c7637bb250e265239ac9747d"
+    },
+    {
+      "seed": 284,
+      "split": "selection",
+      "seconds": 60,
+      "student_hits": [
+        12,
+        0
+      ],
+      "teacher_hits": [
+        17,
+        0
+      ],
+      "student_first_fall_s": [
+        null,
+        null
+      ],
+      "teacher_first_fall_s": [
+        null,
+        null
+      ],
+      "student_invalid_frames": 0,
+      "student_source": "validation-284-enriched-0-latest",
+      "student_samples_sha256": "4c54a6108763d62ce4d8d3965b9cd1cb1f6ad413b6f309a309f2a8748df0c0af"
+    },
+    {
+      "seed": 371,
+      "split": "heldout",
+      "seconds": 60,
+      "student_hits": [
+        2,
+        0
+      ],
+      "teacher_hits": [
+        7,
+        0
+      ],
+      "student_first_fall_s": [
+        null,
+        null
+      ],
+      "teacher_first_fall_s": [
+        null,
+        null
+      ],
+      "student_invalid_frames": 0,
+      "student_source": "heldout-final-371",
+      "student_samples_sha256": "fafec02f26fb4713fcbbe2685aa871e415ac4a752d0672be248e28da5026a0e5"
+    },
+    {
+      "seed": 577,
+      "split": "heldout",
+      "seconds": 60,
+      "student_hits": [
+        7,
+        0
+      ],
+      "teacher_hits": [
+        3,
+        0
+      ],
+      "student_first_fall_s": [
+        null,
+        null
+      ],
+      "teacher_first_fall_s": [
+        null,
+        null
+      ],
+      "student_invalid_frames": 0,
+      "student_source": "heldout-final-577",
+      "student_samples_sha256": "c99dda6455fe1599dc60b258e36ce879f825411b58acd4b43d2c72cec6fe034f"
+    }
+  ],
+  "teacher_sha256": "817209a0d13962fed8a80affab9d003565d32fd2cfffb9d0531c97fc70744115",
+  "training": {
+    "state": "completed",
+    "bundle_sha256": "884adc2b2612305484b760120e247f72ec39429dcbc5449c85fc9297697d9a89",
+    "epochs_requested": 200,
+    "input": [
+      1,
+      1097
+    ],
+    "output": [
+      1,
+      225
+    ],
+    "external_state": false,
+    "validation_worlds": [
+      6,
+      7
+    ],
+    "initialization": "new direct pose network; existing blue checkpoint has an old-motion frozen latent decoder",
+    "checkpoint": "student-0/best.pt",
+    "source_hashes": {
+      "train_student.py": "c2ec3e544cb58cd14fd55e5ec5f5465ce147c5c82be040b504383123169804a4",
+      "student_policy.py": "81d68620b47e328c9f0b2df431bf48811fd53222b83cec4c4f4223547040857b"
+    },
+    "wall_seconds": 76.13076083897613,
+    "weights_lineage": {
+      "path": "student-0/best.pt",
+      "sha256": "6b3a84ddd0ab806cdf95583e913372d8ddc7de7a54eda5cddfff655497b9bcff",
+      "previous_bundle_sha256": "884adc2b2612305484b760120e247f72ec39429dcbc5449c85fc9297697d9a89",
+      "optimizer_restored": false
+    },
+    "train_rows": 67200,
+    "validation_rows": 22500,
+    "by_family_train": {
+      "forward": 37126,
+      "ready-entry": 1300,
+      "recover_guard": 7786,
+      "straight_lr": 14471,
+      "turn": 4189,
+      "uppercut_lr": 2328
+    },
+    "by_family_validation": {
+      "forward": 11994,
+      "ready-entry": 400,
+      "recover_guard": 3203,
+      "straight_lr": 5228,
+      "turn": 1571,
+      "uppercut_lr": 104
+    },
+    "provenance": [
+      {
+        "path": "/home/zhanghan/projects/HBot-student-submission-20261107/teacher-general/samples.npz",
+        "sha256": "2bca01d4f332c9ad0ff8a43bb8865f0389fbe8a86f92f5af4b2cbf4a72d32cb9",
+        "rows": 18000
+      },
+      {
+        "path": "/home/zhanghan/projects/HBot-student-submission-20261107/teacher-close/samples.npz",
+        "sha256": "545481288904793784cc6dda12e018929be0e3bbfbf788c20252dda214a3b374",
+        "rows": 12000
+      },
+      {
+        "path": "/home/zhanghan/projects/HBot-student-submission-20261107/teacher-native/samples.npz",
+        "sha256": "7b8847c9e4719bd25244e5fba5b414b6606f60dd698213c81846e31e0417d411",
+        "rows": 24000
+      },
+      {
+        "path": "/home/zhanghan/projects/HBot-student-submission-20261107/teacher-enrichment-1/samples.npz",
+        "sha256": "9aac2e63ffc8e39f7c0de469a2db41f8331eba826ce253a174b034a8a29bfed3",
+        "rows": 36000
+      }
+    ],
+    "epoch": 88,
+    "updates": 11616,
+    "training_loss": 0.0014599992543281545,
+    "validation_loss": 0.026871629059314728,
+    "position_rmse_m": 0.04124179109930992,
+    "position_p95_m": 0.0459258146584034,
+    "wrist_rmse_m": 0.04002092406153679,
+    "best_epoch": 58,
+    "best_validation_loss": 0.026130435988307,
+    "best_checkpoint_sha256": "e2ac0dce1a41277a8ab64bc384b68bf50d0f37cbc02f22921ea187bb9358fda6"
+  },
+  "parity": {
+    "state": "completed",
+    "source": "/home/zhanghan/projects/HBot-student-submission-20261107/evaluation-enriched-0-latest",
+    "model_sha256": "1ee3d8f0c9dccaa25f3dcb0e81902104fee252f52667b68e974d7a3f2ead87c9",
+    "source_sha256": "1e0f375035a68db409b05015584aa548bd41f084c7637bb250e265239ac9747d",
+    "samples": 3000,
+    "checked": 3000,
+    "failures": [],
+    "maxima": {
+      "cpu_position_m": 5.415910777628596E-07,
+      "cpu_max_position_error_m": 5.415911032374575E-07,
+      "cpu_max_rotation_error_rad": 1.4934436902959421E-06,
+      "cpu_max_rotation_component_error": 1.0132789611816406E-06,
+      "cpu_max_abs_error": 1.0132789611816406E-06,
+      "cuda_position_m": 2.3888378564151935E-07,
+      "cuda_max_position_error_m": 2.388837865275353E-07,
+      "cuda_max_rotation_error_rad": 5.999992013741191E-07,
+      "cuda_max_rotation_component_error": 4.917383193969727E-07,
+      "cuda_max_abs_error": 4.917383193969727E-07
+    },
+    "deterministic_active_repeats": 20,
+    "near_aligned_probe_rows": 47,
+    "repeat_probe_index": 2329,
+    "wall_seconds": 54.404722690582275
+  },
+  "official_5090_qualification": false,
+  "full_competition_gpu_match": "not completed: host driver exposes CUDA12.2; pinned runtime requires >=12.4",
+  "timing_work": "deferred at explicit user request; original behavior-preserving submission chosen",
+  "remote_checkpoint": "/home/zhanghan/projects/HBot-student-submission-20261107/student-enriched-0/latest.pt",
+  "checkpoint_sha256": "842cdc018a0d1ffd0ea5518cedfa20812cced5511a1a59ba2ddaa6361de5be4e",
+  "completed_unix": 1794031629.8874245
+}

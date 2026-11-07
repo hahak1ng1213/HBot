@@ -1,0 +1,36 @@
+{
+  "selected_unix": 1794031327.0814118,
+  "model": "student-enriched-0/latest.pt",
+  "onnx_sha256": "1ee3d8f0c9dccaa25f3dcb0e81902104fee252f52667b68e974d7a3f2ead87c9",
+  "method": "pure neural teacher distillation with coherent teacher-only enrichment",
+  "validation_seeds": [
+    273,
+    284
+  ],
+  "validation_hits": [
+    [
+      12,
+      0
+    ],
+    [
+      12,
+      0
+    ]
+  ],
+  "validation_falls": [
+    [
+      null,
+      null
+    ],
+    [
+      null,
+      null
+    ]
+  ],
+  "heldout_seeds": [
+    371,
+    577
+  ],
+  "heldout_results_used_for_selection": false,
+  "reason": "consistent two-scenario performance with complete strokes; preserve original exported behavior; timing work deferred at user request"
+}

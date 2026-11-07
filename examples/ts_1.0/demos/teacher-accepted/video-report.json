@@ -1,0 +1,9 @@
+{
+  "frames": 1500,
+  "seconds": 60.0,
+  "source": "/home/zhanghan/projects/HBot-stance-alignment-v10-20261106/eval-retract-20261107-targeted-settle",
+  "source_sha256": "c02e4ff4184299e414366e7e515b3f93e728fd5a396e63164aa49b5f9b525645",
+  "video_sha256": "e378931247dc40e9512c041bd6230b027f7c278477e627841601aadd36485b3a",
+  "resimulated": false,
+  "render_only_wall_opacity": 0.12
+}

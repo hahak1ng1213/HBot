@@ -1,0 +1,42 @@
+{
+  "state": "completed",
+  "onnx_sha256": "1ee3d8f0c9dccaa25f3dcb0e81902104fee252f52667b68e974d7a3f2ead87c9",
+  "bytes": 4102102,
+  "input": {
+    "name": "obs",
+    "shape": [
+      1,
+      1097
+    ],
+    "dtype": "float32"
+  },
+  "output": {
+    "name": "target_pose",
+    "shape": [
+      1,
+      225
+    ],
+    "dtype": "float32"
+  },
+  "embedded_weights": true,
+  "external_state": false,
+  "checkpoint_sha256": "842cdc018a0d1ffd0ea5518cedfa20812cced5511a1a59ba2ddaa6361de5be4e",
+  "bundle_sha256": "884adc2b2612305484b760120e247f72ec39429dcbc5449c85fc9297697d9a89",
+  "parity": {
+    "cpu_max_position_error_m": 4.308471767545033e-07,
+    "cpu_max_rotation_error_rad": 1.2128465379687235e-05,
+    "cpu_max_rotation_component_error": 1.2040138244628906e-05,
+    "cpu_max_abs_error": 1.2040138244628906e-05,
+    "cuda_max_position_error_m": 1.575670091998324e-07,
+    "cuda_max_rotation_error_rad": 3.201766746180668e-06,
+    "cuda_max_rotation_component_error": 3.159046173095703e-06,
+    "cuda_max_abs_error": 3.159046173095703e-06
+  },
+  "probe_count": 50,
+  "all_compute_nodes_cuda": true,
+  "deterministic_repeats": 10,
+  "upper_only_cuda_ms_mean": 13.407374403905123,
+  "upper_only_cuda_ms_p95": 16.686736838892102,
+  "complete_chain_5090_qualification": "not performed",
+  "closed_loop_acceptance": "separate evaluation required"
+}

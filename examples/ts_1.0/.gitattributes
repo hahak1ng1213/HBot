@@ -1,0 +1,11 @@
+# Preserve validated snapshot bytes and make these small release assets available
+# directly through Git without a separate LFS download.
+# The frozen sources include CRLF and terminal blank lines; retain their hashes.
+* -text whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+*.py -text
+*.json -text
+*.onnx -filter -diff -merge -text
+*.pt -filter -diff -merge -text
+*.npz -filter -diff -merge -text
+*.mp4 -filter -diff -merge -text
+*.jpg -filter -diff -merge -text

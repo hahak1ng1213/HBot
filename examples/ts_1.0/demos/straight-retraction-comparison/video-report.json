@@ -1,0 +1,15 @@
+{
+  "source": [
+    "/home/zhanghan/projects/HBot-stance-alignment-v10-20261106/eval-extension-20261107-forward030hold",
+    "/home/zhanghan/projects/HBot-stance-alignment-v10-20261106/eval-retract-20261107-pulse_damped040"
+  ],
+  "source_sha256": [
+    "267a6ee55dcb6e0dc3e4c2eb3bc8a43562c2279a4c8698201ddb822b13aa298d",
+    "25b97821a360825e34070ed8732a26e88c190a94624ab8f599a1c2fcd38b8ee1"
+  ],
+  "video_sha256": "42923f2952aa45d1378aef06ce2064e2d0e7e856ce87b5570a6ca399a6578216",
+  "frames": 200,
+  "seconds": 8.0,
+  "resimulated": false,
+  "kind": "continuous-punch diagnostic, not normal match"
+}
